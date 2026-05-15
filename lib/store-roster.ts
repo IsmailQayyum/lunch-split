@@ -20,7 +20,10 @@ export async function getRoster(): Promise<Person[]> {
     const { blobs } = await list({ prefix: PATH });
     const exact = blobs.find((b) => b.pathname === PATH);
     if (!exact) return [];
-    const res = await fetch(exact.url, { cache: "no-store" });
+    // Cache-bust: Vercel Blob's CDN can serve stale content after overwrites;
+    // a unique query param forces a fresh fetch from origin.
+    const bustUrl = `${exact.url}?t=${Date.now()}`;
+    const res = await fetch(bustUrl, { cache: "no-store" });
     if (!res.ok) return [];
     const arr = (await res.json()) as Person[];
     if (!Array.isArray(arr)) return [];

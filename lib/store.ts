@@ -12,7 +12,9 @@ export async function getTicket(slug: string): Promise<Ticket | null> {
   const { blobs } = await list({ prefix: path });
   const exact = blobs.find((b) => b.pathname === path);
   if (!exact) return null;
-  const res = await fetch(exact.url, { cache: "no-store" });
+  // Cache-bust to force a fresh fetch (CDN can serve stale after overwrites).
+  const bustUrl = `${exact.url}?t=${Date.now()}`;
+  const res = await fetch(bustUrl, { cache: "no-store" });
   if (!res.ok) return null;
   return (await res.json()) as Ticket;
 }
