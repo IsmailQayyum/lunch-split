@@ -3,15 +3,15 @@
 @tailwind utilities;
 
 :root {
-  --paper: #ede2c8;
-  --paper-light: #f5ebd3;
-  --paper-deep: #e2d6b5;
-  --ink: #1a1610;
-  --ink-soft: #4e4133;
-  --ink-faint: #92806a;
-  --saffron: #c7472a;
-  --moss: #4a6f3a;
-  --rust: #9c3f2a;
+  --paper: #f0e7cf;
+  --paper-light: #f8efd8;
+  --paper-deep: #e4d8b8;
+  --ink: #15110b;
+  --ink-soft: #2e251a;
+  --ink-faint: #6e5c43;
+  --saffron: #b8401f;
+  --moss: #3e6131;
+  --rust: #8a3520;
 }
 
 @layer base {
@@ -22,8 +22,8 @@
   body {
     color: var(--ink);
     font-family: var(--font-mono), ui-monospace, monospace;
-    font-size: 14px;
-    line-height: 1.55;
+    font-size: 15px;
+    line-height: 1.6;
     font-feature-settings:
       "ss01" on,
       "calt" on;
@@ -31,9 +31,9 @@
   body {
     background-color: var(--paper);
     background-image:
-      radial-gradient(ellipse 90% 70% at 50% -10%, rgba(255, 248, 230, 0.7), transparent 60%),
-      radial-gradient(ellipse 70% 50% at 80% 110%, rgba(199, 71, 42, 0.06), transparent 60%),
-      url("data:image/svg+xml;utf8,<svg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.10 0 0 0 0 0.09 0 0 0 0 0.07 0 0 0 0.25 0'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>");
+      radial-gradient(ellipse 90% 70% at 50% -10%, rgba(255, 250, 235, 0.55), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 80% 110%, rgba(184, 64, 31, 0.04), transparent 60%),
+      url("data:image/svg+xml;utf8,<svg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.08 0 0 0 0 0.07 0 0 0 0 0.05 0 0 0 0.12 0'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>");
     background-blend-mode: normal, normal, multiply;
     background-attachment: fixed, fixed, fixed;
     min-height: 100vh;
@@ -78,11 +78,11 @@
   /* Eyebrow / kicker label */
   .eyebrow {
     font-family: var(--font-mono), monospace;
-    font-size: 10px;
-    letter-spacing: 0.28em;
+    font-size: 11px;
+    letter-spacing: 0.22em;
     text-transform: uppercase;
-    color: var(--ink-faint);
-    font-weight: 500;
+    color: var(--ink-soft);
+    font-weight: 600;
   }
 
   /* Dotted divider (receipt style) */

@@ -40,6 +40,11 @@ export default function Home() {
           <button className="btn btn-lg">↓ Punch a new ticket</button>
         </Link>
         <p className="eyebrow mt-3">Takes ~ 20 SECONDS</p>
+        <div className="mt-6">
+          <Link href="/people" className="eyebrow ink-link">
+            ⋯ MANAGE THE LUNCH ROSTER →
+          </Link>
+        </div>
       </div>
 
       <div className="divider-dots my-10" />

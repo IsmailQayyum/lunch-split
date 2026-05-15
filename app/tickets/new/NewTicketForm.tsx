@@ -1,11 +1,14 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { PersonPicker } from "@/components/PersonPicker";
 import { createTicketAction } from "@/lib/actions/tickets";
 import { splitEvenly } from "@/lib/shares";
+import type { Person } from "@/lib/store-roster";
 
 type PayerProfile = {
   name: string;
@@ -31,16 +34,16 @@ const emptyProfile: PayerProfile = {
   acceptsCash: true,
 };
 
-type Row = { name: string; email: string; whatsapp: string; amount: string };
-
-export function NewTicketForm() {
+export function NewTicketForm({ roster: initialRoster }: { roster: Person[] }) {
+  const [roster, setRoster] = useState(initialRoster);
   const [payer, setPayer] = useState<PayerProfile>(emptyProfile);
   const [showPayer, setShowPayer] = useState(true);
   const [title, setTitle] = useState("");
   const [total, setTotal] = useState("");
   const [notes, setNotes] = useState("");
   const [splitMode, setSplitMode] = useState<"even" | "custom">("even");
-  const [rows, setRows] = useState<Row[]>([{ name: "", email: "", whatsapp: "", amount: "" }]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -56,20 +59,24 @@ export function NewTicketForm() {
   }, []);
 
   const totalNum = Math.round(Number(total) || 0);
+  const selected = useMemo(
+    () => selectedIds.map((id) => roster.find((p) => p.id === id)).filter((x): x is Person => !!x),
+    [selectedIds, roster],
+  );
   const evenShares =
-    splitMode === "even" && totalNum > 0 && rows.length > 0
-      ? splitEvenly(totalNum, rows.length)
+    splitMode === "even" && totalNum > 0 && selected.length > 0
+      ? splitEvenly(totalNum, selected.length)
       : null;
 
-  function updateRow(i: number, patch: Partial<Row>) {
-    setRows((r) => r.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
+  function togglePerson(id: string) {
+    setSelectedIds((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   }
-  function addRow() {
-    setRows((r) => [...r, { name: "", email: "", whatsapp: "", amount: "" }]);
+
+  function onPersonAdded(p: Person) {
+    setRoster((r) => (r.some((x) => x.id === p.id) ? r : [...r, p]));
+    setSelectedIds((s) => (s.includes(p.id) ? s : [...s, p.id]));
   }
-  function removeRow(i: number) {
-    setRows((r) => (r.length === 1 ? r : r.filter((_, idx) => idx !== i)));
-  }
+
   function updatePayer(patch: Partial<PayerProfile>) {
     setPayer((p) => ({ ...p, ...patch }));
   }
@@ -83,17 +90,19 @@ export function NewTicketForm() {
     }
     if (!title.trim()) return setError("What did you eat? Give it a title.");
     if (!totalNum) return setError("Bill total needs a number.");
+    if (selected.length === 0) return setError("Pick at least one person.");
 
-    const participants = rows
-      .map((r) => ({
-        name: r.name.trim(),
-        email: r.email.trim() || undefined,
-        whatsapp: r.whatsapp.trim() || undefined,
-        amount: r.amount ? Number(r.amount) : undefined,
-      }))
-      .filter((r) => r.name);
-
-    if (participants.length === 0) return setError("Add at least one other person.");
+    const participants = selected.map((p, i) => ({
+      name: p.name,
+      email: p.email ?? undefined,
+      whatsapp: p.whatsapp ?? undefined,
+      amount:
+        splitMode === "custom"
+          ? Number(customAmounts[p.id] ?? "0") || 0
+          : evenShares
+            ? evenShares[i]
+            : undefined,
+    }));
 
     try {
       localStorage.setItem(PROFILE_KEY, JSON.stringify(payer));
@@ -117,7 +126,7 @@ export function NewTicketForm() {
 
   return (
     <div className="space-y-10 stagger">
-      {/* PAYER SECTION */}
+      {/* PAYER */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <div className="eyebrow text-saffron">§ 01 · YOU (THE PAYER)</div>
@@ -130,12 +139,12 @@ export function NewTicketForm() {
           </button>
         </div>
         {!showPayer ? (
-          <div className="text-sm">
-            <span className="display-italic text-[22px]">{payer.name || "—"}</span>
-            <span className="text-ink-faint ml-2 text-[11px]">
+          <div className="text-[14px]">
+            <span className="display-italic text-[24px]">{payer.name || "—"}</span>
+            <span className="text-ink-faint ml-2 text-[12px]">
               {payer.whatsapp || payer.email || "no contact saved"}
             </span>
-            <span className="text-ink-faint ml-2 text-[11px]">· saved on this device</span>
+            <span className="text-ink-faint ml-2 text-[12px]">· saved on this device</span>
           </div>
         ) : (
           <div className="space-y-6">
@@ -164,7 +173,7 @@ export function NewTicketForm() {
                   onChange={(e) => updatePayer({ acceptsCash: e.target.checked })}
                   className="h-4 w-4 accent-[color:var(--saffron)] border-ink"
                 />
-                <span className="text-[12px]">Cash on the spot is fine.</span>
+                <span className="text-[13px]">Cash on the spot is fine.</span>
               </label>
             </div>
           </div>
@@ -185,7 +194,7 @@ export function NewTicketForm() {
 
       <div className="divider-dots" />
 
-      {/* PARTICIPANTS */}
+      {/* PEOPLE */}
       <section>
         <div className="flex items-center justify-between mb-4">
           <div className="eyebrow text-saffron">§ 03 · WHO JOINED</div>
@@ -215,70 +224,63 @@ export function NewTicketForm() {
           </div>
         </div>
 
-        {splitMode === "even" && totalNum > 0 && (
-          <div className="text-[11px] text-ink-faint mb-4 italic">
-            Each person: ~ ₨ {Math.floor(totalNum / Math.max(rows.length, 1)).toLocaleString("en-PK")}
-            <span className="ml-1 text-ink-soft">(you take the rounding remainder)</span>
+        <PersonPicker
+          roster={roster}
+          selectedIds={selectedIds}
+          onToggle={togglePerson}
+          onAdded={onPersonAdded}
+        />
+
+        {selected.length > 0 && (
+          <div className="mt-6 space-y-3 animate-fade-up">
+            <div className="eyebrow">
+              {selected.length} SELECTED ·{" "}
+              {splitMode === "even" && totalNum > 0 ? (
+                <span>~₨ {Math.floor(totalNum / selected.length).toLocaleString("en-PK")} each</span>
+              ) : (
+                <span>set shares below</span>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              {selected.map((p, i) => (
+                <div key={p.id} className="line-item">
+                  <span className="display-italic text-[19px]">{p.name}</span>
+                  <span className="leader" />
+                  {splitMode === "custom" ? (
+                    <div className="w-28">
+                      <Input
+                        type="number"
+                        placeholder="₨"
+                        value={customAmounts[p.id] ?? ""}
+                        onChange={(e) =>
+                          setCustomAmounts((m) => ({ ...m, [p.id]: e.target.value }))
+                        }
+                        className="text-right"
+                      />
+                    </div>
+                  ) : (
+                    <span className="display text-[20px] num">
+                      ₨ {(evenShares ? evenShares[i] : 0).toLocaleString("en-PK")}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
           </div>
         )}
 
-        <div className="space-y-5">
-          {rows.map((r, i) => (
-            <div key={i} className="space-y-3 animate-fade-up">
-              <div className="flex items-baseline justify-between">
-                <div className="eyebrow">ENTRY {String(i + 1).padStart(2, "0")}</div>
-                {rows.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => removeRow(i)}
-                    className="eyebrow text-saffron ink-link"
-                  >
-                    REMOVE
-                  </button>
-                )}
-              </div>
-              <div className="grid grid-cols-12 gap-x-4 gap-y-3">
-                <div className="col-span-12 sm:col-span-5">
-                  <Input placeholder="Name" value={r.name} onChange={(e) => updateRow(i, { name: e.target.value })} />
-                </div>
-                <div className="col-span-6 sm:col-span-4">
-                  <Input placeholder="WhatsApp" value={r.whatsapp} onChange={(e) => updateRow(i, { whatsapp: e.target.value })} />
-                </div>
-                <div className="col-span-6 sm:col-span-3 num">
-                  {splitMode === "custom" ? (
-                    <Input
-                      placeholder="₨ amount"
-                      type="number"
-                      value={r.amount}
-                      onChange={(e) => updateRow(i, { amount: e.target.value })}
-                    />
-                  ) : (
-                    <div className="border-b-[1.5px] border-ink-faint pb-2 text-right text-[14px] num">
-                      ₨ {(evenShares ? evenShares[i] : 0).toLocaleString("en-PK")}
-                    </div>
-                  )}
-                </div>
-                <div className="col-span-12">
-                  <Input placeholder="Email (optional, for reminders)" type="email" value={r.email} onChange={(e) => updateRow(i, { email: e.target.value })} />
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="mt-6 eyebrow">
+          <Link href="/people" className="ink-link">
+            ⋯ MANAGE THE FULL ROSTER →
+          </Link>
         </div>
-
-        <button
-          type="button"
-          onClick={addRow}
-          className="mt-6 eyebrow ink-link"
-        >
-          + ADD ANOTHER LINE
-        </button>
       </section>
 
       <div className="divider-double" />
 
       {error && (
-        <div className="text-[12px] text-saffron border-l-2 border-saffron pl-3 italic">
+        <div className="text-[13px] text-saffron border-l-2 border-saffron pl-3 italic">
           {error}
         </div>
       )}
