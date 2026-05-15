@@ -17,7 +17,8 @@ function nowStamp() {
     .toUpperCase();
 }
 
-function fmtBillDate(iso: string) {
+function fmtBillDate(iso: string | null | undefined): string {
+  if (!iso) return "—";
   const d = new Date(iso);
   const today = new Date();
   const isToday = d.toDateString() === today.toDateString();
@@ -28,7 +29,6 @@ function fmtBillDate(iso: string) {
   if (isYesterday) return "Yesterday";
   return d
     .toLocaleDateString("en-GB", {
-      weekday: "short",
       day: "2-digit",
       month: "short",
     })
@@ -45,11 +45,16 @@ export default async function Home() {
     .sort((a, b) => (b.closedAt ?? b.createdAt).localeCompare(a.closedAt ?? a.createdAt))
     .slice(0, 8);
 
-  const unresolvedTotal = open.reduce((s, e) => s + e.totalAmount, 0);
-  const stillOwed = open.reduce(
-    (s, e) => s + e.totalAmount * Math.max(0, 1 - e.settledCount / Math.max(1, e.participantCount)),
-    0,
-  );
+  const stillOwed = open.reduce((s, e) => {
+    const pendingTotal = e.participants
+      .filter((p) => p.status !== "confirmed" && p.status !== "cash")
+      .reduce((x, p) => x + p.amountOwed, 0);
+    // fallback for legacy entries without participants list
+    if (pendingTotal === 0 && e.participants.length === 0) {
+      return s + e.totalAmount * Math.max(0, 1 - e.settledCount / Math.max(1, e.participantCount));
+    }
+    return s + pendingTotal;
+  }, 0);
 
   return (
     <main className="max-w-[560px] mx-auto px-5 pt-10 pb-16 animate-print">
@@ -68,7 +73,6 @@ export default async function Home() {
 
       <div className="divider-dots my-10" />
 
-      {/* CTA */}
       <div className="text-center">
         <Link href="/tickets/new">
           <button className="btn btn-lg">↓ Punch a new ticket</button>
@@ -84,7 +88,7 @@ export default async function Home() {
         </div>
       </div>
 
-      {/* Unresolved bucket */}
+      {/* Unresolved */}
       <section className="mt-14">
         <div className="flex items-end justify-between mb-1">
           <div>
@@ -114,7 +118,7 @@ export default async function Home() {
         )}
       </section>
 
-      {/* Resolved bucket */}
+      {/* Resolved */}
       <section className="mt-12">
         <div className="flex items-end justify-between mb-1">
           <div>
@@ -136,7 +140,6 @@ export default async function Home() {
         )}
       </section>
 
-      {/* Footer */}
       <footer className="mt-16 text-center space-y-3">
         <div className="divider-double max-w-[180px] mx-auto" />
         <div className="eyebrow">
@@ -160,9 +163,32 @@ function BucketLine({
 }) {
   const settled = `${entry.settledCount}/${entry.participantCount}`;
   const pendingCount = entry.participantCount - entry.settledCount;
+
+  const paid = entry.participants.filter(
+    (p) => p.status === "confirmed" || p.status === "cash",
+  );
+  const pending = entry.participants.filter(
+    (p) => p.status !== "confirmed" && p.status !== "cash",
+  );
+  const pendingTotal = pending.reduce((s, p) => s + p.amountOwed, 0);
+
+  const dateBlock =
+    kind === "closed" && entry.closedAt ? (
+      <>
+        <span>{fmtBillDate(entry.createdAt)}</span>
+        <span className="mx-1 text-ink-faint/70">→</span>
+        <span className="text-moss">{fmtBillDate(entry.closedAt)}</span>
+      </>
+    ) : (
+      <span>{fmtBillDate(entry.createdAt)}</span>
+    );
+
   return (
-    <li className="animate-fade-up" style={{ animationDelay: `${delayMs}ms` }}>
-      <Link href={`/t/${entry.slug}`} className="group block">
+    <li
+      className="relative group animate-fade-up"
+      style={{ animationDelay: `${delayMs}ms` }}
+    >
+      <Link href={`/t/${entry.slug}`} className="block">
         <div className="line-item py-2.5 group-hover:text-saffron transition-colors">
           <div className="flex items-center gap-2 min-w-0">
             <span className="display-italic text-[20px] truncate">{entry.title}</span>
@@ -181,11 +207,73 @@ function BucketLine({
               ₨ {entry.totalAmount.toLocaleString("en-PK")}
             </div>
             <div className="text-[10px] text-ink-faint mt-0.5 font-mono tracking-wider">
-              {fmtBillDate(entry.createdAt)} · {entry.payerName} · {settled}
+              {dateBlock} · {entry.payerName} · {settled}
             </div>
           </div>
         </div>
       </Link>
+
+      {entry.participants.length > 0 && (
+        <div
+          className="
+            absolute left-0 right-0 top-full mt-1 z-20
+            invisible opacity-0 translate-y-1
+            group-hover:visible group-hover:opacity-100 group-hover:translate-y-0
+            transition-all duration-200 ease-out
+            pointer-events-none
+            bg-paper-light border border-ink/40 p-4 shadow-lg
+          "
+        >
+          <div className="grid grid-cols-2 gap-4 text-[12px]">
+            <div>
+              <div className="eyebrow text-moss mb-2">
+                ✓ PAID · {paid.length}
+              </div>
+              {paid.length === 0 ? (
+                <div className="text-ink-faint italic text-[11px]">none yet</div>
+              ) : (
+                <ul className="space-y-0.5">
+                  {paid.map((p, i) => (
+                    <li key={`${p.name}-${i}`} className="display-italic text-[15px] leading-tight">
+                      {p.name}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            <div>
+              <div className="eyebrow text-saffron mb-2">
+                ⚠ PENDING · {pending.length}
+              </div>
+              {pending.length === 0 ? (
+                <div className="text-ink-faint italic text-[11px]">all settled</div>
+              ) : (
+                <ul className="space-y-0.5">
+                  {pending.map((p, i) => (
+                    <li
+                      key={`${p.name}-${i}`}
+                      className="display-italic text-[15px] leading-tight flex items-baseline gap-2"
+                    >
+                      <span className="truncate">{p.name}</span>
+                      <span className="text-[10px] font-mono num text-ink-faint shrink-0">
+                        ₨{p.amountOwed.toLocaleString("en-PK")}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          {kind === "open" && pendingTotal > 0 && (
+            <div className="mt-3 pt-3 border-t border-dashed border-ink-faint/40 flex items-baseline justify-between">
+              <span className="eyebrow">OUTSTANDING ON THIS</span>
+              <span className="display text-[18px] num text-saffron">
+                ₨ {pendingTotal.toLocaleString("en-PK")}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </li>
   );
 }

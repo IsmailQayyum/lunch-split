@@ -1,5 +1,7 @@
 import { put, list } from "@vercel/blob";
-import type { Ticket } from "./types";
+import type { Ticket, ParticipantStatus } from "./types";
+
+export type IndexParticipant = { name: string; status: ParticipantStatus; amountOwed: number };
 
 export type IndexEntry = {
   slug: string;
@@ -12,7 +14,24 @@ export type IndexEntry = {
   closedAt: string | null;
   participantCount: number;
   settledCount: number;
+  participants: IndexParticipant[];
 };
+
+function normalizeEntry(e: Partial<IndexEntry> & { slug: string }): IndexEntry {
+  return {
+    slug: e.slug,
+    title: e.title ?? "",
+    totalAmount: e.totalAmount ?? 0,
+    currency: e.currency ?? "PKR",
+    payerName: e.payerName ?? "",
+    status: e.status ?? "open",
+    createdAt: e.createdAt ?? new Date().toISOString(),
+    closedAt: e.closedAt ?? null,
+    participantCount: e.participantCount ?? 0,
+    settledCount: e.settledCount ?? 0,
+    participants: Array.isArray(e.participants) ? e.participants : [],
+  };
+}
 
 const PATH = "tickets-index.json";
 
@@ -30,6 +49,11 @@ export function toIndexEntry(t: Ticket): IndexEntry {
     settledCount: t.participants.filter(
       (p) => p.status === "confirmed" || p.status === "cash",
     ).length,
+    participants: t.participants.map((p) => ({
+      name: p.name,
+      status: p.status,
+      amountOwed: p.amountOwed,
+    })),
   };
 }
 
@@ -41,8 +65,11 @@ export async function readIndex(): Promise<IndexEntry[]> {
     const bustUrl = `${exact.url}?t=${Date.now()}`;
     const res = await fetch(bustUrl, { cache: "no-store" });
     if (!res.ok) return [];
-    const arr = (await res.json()) as IndexEntry[];
-    return Array.isArray(arr) ? arr : [];
+    const arr = await res.json();
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((e: { slug?: unknown }) => typeof e.slug === "string")
+      .map((e) => normalizeEntry(e as Partial<IndexEntry> & { slug: string }));
   } catch {
     return [];
   }
