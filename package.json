@@ -1,0 +1,42 @@
+{
+  "name": "lunch-split",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
+  },
+  "dependencies": {
+    "@auth/drizzle-adapter": "^1.7.4",
+    "@neondatabase/serverless": "^0.10.4",
+    "@vercel/blob": "^0.27.0",
+    "clsx": "^2.1.1",
+    "drizzle-orm": "^0.36.4",
+    "lucide-react": "^0.460.0",
+    "nanoid": "^5.0.9",
+    "next": "^15.1.6",
+    "next-auth": "5.0.0-beta.25",
+    "react": "19.0.0",
+    "react-dom": "19.0.0",
+    "resend": "^4.0.1",
+    "tailwind-merge": "^2.5.5",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/react": "19.0.1",
+    "@types/react-dom": "19.0.1",
+    "autoprefixer": "^10.4.20",
+    "dotenv": "^16.4.7",
+    "drizzle-kit": "^0.30.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.16",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

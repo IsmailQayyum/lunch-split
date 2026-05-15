@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --bg: 250 249 245;
+  --fg: 18 18 18;
+  --muted: 110 110 110;
+  --border: 230 228 222;
+  --accent: 24 95 72;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: 14 14 14;
+    --fg: 240 240 240;
+    --muted: 150 150 150;
+    --border: 38 38 38;
+    --accent: 76 205 158;
+  }
+}
+
+html,
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--fg));
+}
+
+* {
+  border-color: rgb(var(--border));
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
