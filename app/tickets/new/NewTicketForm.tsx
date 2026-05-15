@@ -10,34 +10,12 @@ import { createTicketAction } from "@/lib/actions/tickets";
 import { splitEvenly } from "@/lib/shares";
 import type { Person } from "@/lib/store-roster";
 
-type PayerProfile = {
-  name: string;
-  email: string;
-  whatsapp: string;
-  jazzcash: string;
-  easypaisa: string;
-  iban: string;
-  accountTitle: string;
-  acceptsCash: boolean;
-};
-
-const PROFILE_KEY = "lunch-split:payer-profile";
-
-const emptyProfile: PayerProfile = {
-  name: "",
-  email: "",
-  whatsapp: "",
-  jazzcash: "",
-  easypaisa: "",
-  iban: "",
-  accountTitle: "",
-  acceptsCash: true,
-};
+const ME_KEY = "lunch-split:me-id";
 
 export function NewTicketForm({ roster: initialRoster }: { roster: Person[] }) {
   const [roster, setRoster] = useState(initialRoster);
-  const [payer, setPayer] = useState<PayerProfile>(emptyProfile);
-  const [showPayer, setShowPayer] = useState(true);
+  const [payerId, setPayerId] = useState<string | null>(null);
+
   const [title, setTitle] = useState("");
   const [total, setTotal] = useState("");
   const [notes, setNotes] = useState("");
@@ -49,16 +27,13 @@ export function NewTicketForm({ roster: initialRoster }: { roster: Person[] }) {
 
   useEffect(() => {
     try {
-      const raw = localStorage.getItem(PROFILE_KEY);
-      if (raw) {
-        const saved = JSON.parse(raw);
-        setPayer({ ...emptyProfile, ...saved });
-        if (saved.name) setShowPayer(false);
-      }
+      const saved = localStorage.getItem(ME_KEY);
+      if (saved && roster.some((p) => p.id === saved)) setPayerId(saved);
     } catch {}
-  }, []);
+  }, [roster]);
 
   const totalNum = Math.round(Number(total) || 0);
+  const payer = payerId ? roster.find((p) => p.id === payerId) : null;
   const selected = useMemo(
     () => selectedIds.map((id) => roster.find((p) => p.id === id)).filter((x): x is Person => !!x),
     [selectedIds, roster],
@@ -69,23 +44,30 @@ export function NewTicketForm({ roster: initialRoster }: { roster: Person[] }) {
       : null;
 
   function togglePerson(id: string) {
+    if (id === payerId) return; // don't add payer to participants
     setSelectedIds((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   }
 
   function onPersonAdded(p: Person) {
     setRoster((r) => (r.some((x) => x.id === p.id) ? r : [...r, p]));
+    if (!payerId) {
+      // Default the new person to the payer if none picked yet — common pattern
+    }
     setSelectedIds((s) => (s.includes(p.id) ? s : [...s, p.id]));
   }
 
-  function updatePayer(patch: Partial<PayerProfile>) {
-    setPayer((p) => ({ ...p, ...patch }));
+  function selectAsPayer(id: string) {
+    setPayerId(id);
+    setSelectedIds((s) => s.filter((x) => x !== id));
+    try {
+      localStorage.setItem(ME_KEY, id);
+    } catch {}
   }
 
   function submit() {
     setError(null);
-    if (!payer.name.trim()) {
-      setError("You haven't told us your name. (You're the payer.)");
-      setShowPayer(true);
+    if (!payer) {
+      setError("Pick yourself as the payer first.");
       return;
     }
     if (!title.trim()) return setError("What did you eat? Give it a title.");
@@ -104,17 +86,22 @@ export function NewTicketForm({ roster: initialRoster }: { roster: Person[] }) {
             : undefined,
     }));
 
-    try {
-      localStorage.setItem(PROFILE_KEY, JSON.stringify(payer));
-    } catch {}
-
     startTransition(async () => {
       try {
         await createTicketAction({
           title: title.trim(),
           totalAmount: totalNum,
           notes: notes.trim() || undefined,
-          payer,
+          payer: {
+            name: payer.name,
+            email: payer.email ?? undefined,
+            whatsapp: payer.whatsapp ?? undefined,
+            jazzcash: payer.jazzcash ?? undefined,
+            easypaisa: payer.easypaisa ?? undefined,
+            iban: payer.iban ?? undefined,
+            accountTitle: payer.accountTitle ?? undefined,
+            acceptsCash: payer.acceptsCash,
+          },
           participants,
           splitMode,
         });
@@ -124,59 +111,66 @@ export function NewTicketForm({ roster: initialRoster }: { roster: Person[] }) {
     });
   }
 
+  const payerHasMethod = payer && (payer.jazzcash || payer.easypaisa || payer.iban || payer.acceptsCash);
+
   return (
     <div className="space-y-10 stagger">
       {/* PAYER */}
       <section>
-        <div className="flex items-center justify-between mb-4">
-          <div className="eyebrow text-saffron">§ 01 · YOU (THE PAYER)</div>
-          <button
-            type="button"
-            onClick={() => setShowPayer((v) => !v)}
-            className="eyebrow ink-link cursor-pointer"
-          >
-            {showPayer ? "COLLAPSE" : "EDIT"}
-          </button>
-        </div>
-        {!showPayer ? (
-          <div className="text-[14px]">
-            <span className="display-italic text-[24px]">{payer.name || "—"}</span>
-            <span className="text-ink-faint ml-2 text-[12px]">
-              {payer.whatsapp || payer.email || "no contact saved"}
-            </span>
-            <span className="text-ink-faint ml-2 text-[12px]">· saved on this device</span>
+        <div className="eyebrow mb-4 text-saffron">§ 01 · WHO PAID</div>
+        {roster.length === 0 ? (
+          <div className="text-[13px] text-ink-soft italic border border-dashed border-ink-faint/50 p-4 text-center">
+            Empty roster.{" "}
+            <Link href="/people" className="ink-link">
+              Add the lunch crew first →
+            </Link>
           </div>
         ) : (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-              <Pair label="YOUR NAME *" value={payer.name} onChange={(v) => updatePayer({ name: v })} placeholder="Ismail Qayyum" />
-              <Pair label="WHATSAPP" value={payer.whatsapp} onChange={(v) => updatePayer({ whatsapp: v })} placeholder="03xx-xxxxxxx" />
+          <>
+            <div className="flex flex-wrap gap-2">
+              {roster.map((p) => {
+                const on = payerId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => selectAsPayer(p.id)}
+                    className={`px-3 py-1.5 border-[1.5px] transition-all duration-150 ${
+                      on
+                        ? "bg-saffron text-paper-light border-saffron"
+                        : "border-ink-faint hover:border-ink"
+                    }`}
+                  >
+                    <span className="display-italic text-[17px] leading-none">{p.name}</span>
+                  </button>
+                );
+              })}
             </div>
-            <Pair label="EMAIL" value={payer.email} onChange={(v) => updatePayer({ email: v })} placeholder="you@example.com" type="email" />
-
-            <div className="pt-2">
-              <div className="eyebrow mb-3">PAYMENT METHODS</div>
-              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                <Pair label="JAZZCASH" value={payer.jazzcash} onChange={(v) => updatePayer({ jazzcash: v })} placeholder="03xx-xxxxxxx" />
-                <Pair label="EASYPAISA" value={payer.easypaisa} onChange={(v) => updatePayer({ easypaisa: v })} placeholder="03xx-xxxxxxx" />
+            {payer && !payerHasMethod && (
+              <div className="mt-4 text-[12px] text-saffron italic">
+                Heads up — {payer.name} has no payment methods saved.{" "}
+                <Link href="/people" className="ink-link">
+                  Add them in the roster →
+                </Link>
               </div>
-              <div className="mt-4">
-                <Pair label="IBAN / BANK ACCOUNT" value={payer.iban} onChange={(v) => updatePayer({ iban: v })} placeholder="PKxx XXXX XXXX XXXX XXXX XXXX" />
+            )}
+            {payer && payerHasMethod && (
+              <div className="mt-4 text-[12px] text-ink-soft">
+                Payment via{" "}
+                {[
+                  payer.jazzcash && "JazzCash",
+                  payer.easypaisa && "EasyPaisa",
+                  payer.iban && "Bank",
+                  payer.acceptsCash && "Cash",
+                ]
+                  .filter(Boolean)
+                  .join(" · ")}{" "}
+                <Link href="/people" className="ink-link ml-1">
+                  edit →
+                </Link>
               </div>
-              <div className="mt-4">
-                <Pair label="ACCOUNT TITLE" value={payer.accountTitle} onChange={(v) => updatePayer({ accountTitle: v })} placeholder="Name on bank account" />
-              </div>
-              <label className="flex items-center gap-2 mt-4 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={payer.acceptsCash}
-                  onChange={(e) => updatePayer({ acceptsCash: e.target.checked })}
-                  className="h-4 w-4 accent-[color:var(--saffron)] border-ink"
-                />
-                <span className="text-[13px]">Cash on the spot is fine.</span>
-              </label>
-            </div>
-          </div>
+            )}
+          </>
         )}
       </section>
 
@@ -194,10 +188,10 @@ export function NewTicketForm({ roster: initialRoster }: { roster: Person[] }) {
 
       <div className="divider-dots" />
 
-      {/* PEOPLE */}
+      {/* PARTICIPANTS */}
       <section>
         <div className="flex items-center justify-between mb-4">
-          <div className="eyebrow text-saffron">§ 03 · WHO JOINED</div>
+          <div className="eyebrow text-saffron">§ 03 · WHO ELSE JOINED</div>
           <div className="inline-flex border-[1.5px] border-ink text-[10px] font-mono">
             <button
               type="button"
@@ -225,7 +219,7 @@ export function NewTicketForm({ roster: initialRoster }: { roster: Person[] }) {
         </div>
 
         <PersonPicker
-          roster={roster}
+          roster={roster.filter((p) => p.id !== payerId)}
           selectedIds={selectedIds}
           onToggle={togglePerson}
           onAdded={onPersonAdded}

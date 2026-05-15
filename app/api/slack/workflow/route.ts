@@ -5,21 +5,24 @@ import { z } from "zod";
 import { newSlug } from "@/lib/slug";
 import { splitEvenly } from "@/lib/shares";
 import { putTicket } from "@/lib/store";
+import { findPersonByEmail, getRoster } from "@/lib/store-roster";
 import type { ParticipantStatus, Ticket } from "@/lib/types";
 
-const newParticipantId = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 12);
+const newParticipantId = customAlphabet(
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+  12,
+);
 
+// Minimal Slack payload — just title, total, and payer's email.
+// Everything else looked up from the roster. Participants optional;
+// people can self-add via the web "+ Add me" picker.
 const payloadSchema = z.object({
   title: z.string().min(1).max(120),
   totalAmount: z.coerce.number().positive(),
   notes: z.string().max(500).optional().nullable(),
 
-  payerName: z.string().min(1).max(80),
-  payerEmail: z.string().email().optional().nullable(),
-  payerWhatsapp: z.string().max(40).optional().nullable(),
-  payerJazzcash: z.string().max(40).optional().nullable(),
-  payerEasypaisa: z.string().max(40).optional().nullable(),
-  payerIban: z.string().max(40).optional().nullable(),
+  payerEmail: z.string().email(),
+  payerNameFallback: z.string().max(80).optional().nullable(),
 
   participants: z
     .array(
@@ -29,7 +32,8 @@ const payloadSchema = z.object({
         whatsapp: z.string().max(40).optional().nullable(),
       }),
     )
-    .min(1),
+    .optional()
+    .default([]),
 });
 
 export async function POST(req: Request) {
@@ -55,8 +59,13 @@ export async function POST(req: Request) {
   }
   const data = parsed.data;
 
+  // Look up payer in the shared roster (preferred) for their saved
+  // payment methods. Fallback to the email + provided name if not found.
+  const roster = await getRoster();
+  const rosterPayer = findPersonByEmail(roster, data.payerEmail);
+
   const total = Math.round(data.totalAmount);
-  const shares = splitEvenly(total, data.participants.length);
+  const shares = data.participants.length > 0 ? splitEvenly(total, data.participants.length) : [];
   const slug = newSlug();
   const now = new Date().toISOString();
 
@@ -66,16 +75,27 @@ export async function POST(req: Request) {
     totalAmount: total,
     currency: "PKR",
     notes: data.notes ?? null,
-    payer: {
-      name: data.payerName,
-      email: data.payerEmail ?? null,
-      whatsapp: data.payerWhatsapp ?? null,
-      jazzcash: data.payerJazzcash ?? null,
-      easypaisa: data.payerEasypaisa ?? null,
-      iban: null,
-      accountTitle: null,
-      acceptsCash: true,
-    },
+    payer: rosterPayer
+      ? {
+          name: rosterPayer.name,
+          email: rosterPayer.email,
+          whatsapp: rosterPayer.whatsapp,
+          jazzcash: rosterPayer.jazzcash,
+          easypaisa: rosterPayer.easypaisa,
+          iban: rosterPayer.iban,
+          accountTitle: rosterPayer.accountTitle,
+          acceptsCash: rosterPayer.acceptsCash,
+        }
+      : {
+          name: data.payerNameFallback || data.payerEmail.split("@")[0],
+          email: data.payerEmail,
+          whatsapp: null,
+          jazzcash: null,
+          easypaisa: null,
+          iban: null,
+          accountTitle: null,
+          acceptsCash: true,
+        },
     participants: data.participants.map((p, i) => ({
       id: newParticipantId(),
       name: p.name,
@@ -102,6 +122,8 @@ export async function POST(req: Request) {
     slug,
     title: data.title,
     total,
+    payerName: ticket.payer.name,
+    payerInRoster: !!rosterPayer,
     participantCount: data.participants.length,
   });
 }

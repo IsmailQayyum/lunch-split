@@ -40,9 +40,12 @@ export default function Home() {
           <button className="btn btn-lg">↓ Punch a new ticket</button>
         </Link>
         <p className="eyebrow mt-3">Takes ~ 20 SECONDS</p>
-        <div className="mt-6">
+        <div className="mt-6 flex flex-col items-center gap-2">
           <Link href="/people" className="eyebrow ink-link">
             ⋯ MANAGE THE LUNCH ROSTER →
+          </Link>
+          <Link href="/setup" className="eyebrow ink-link">
+            ⌁ WIRE UP THE SLACK SHORTCUT →
           </Link>
         </div>
       </div>

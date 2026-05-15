@@ -125,6 +125,15 @@ export default async function TicketPage({
       {/* Itemized */}
       <section>
         <div className="eyebrow mb-4 text-center">⎯ ITEMIZED ⎯</div>
+        {ticket.participants.length === 0 && (
+          <div className="border-2 border-dashed border-saffron/50 p-5 text-center mb-4">
+            <div className="display-italic text-[26px] mb-2">No-one's on the list yet.</div>
+            <div className="text-[13px] text-ink-soft">
+              Be the first — tap{" "}
+              <span className="display-italic text-[17px] text-saffron">+ Add me</span> below.
+            </div>
+          </div>
+        )}
         <div className="space-y-3">
           {ticket.participants.map((p) => (
             <ParticipantRow
