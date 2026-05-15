@@ -166,7 +166,7 @@ export function NewTicketForm({
               <div className="mt-4 text-[12px] text-ink-soft">
                 Payment via{" "}
                 {[
-                  payer.walletNumber && `Wallet (${payer.walletApps.length} apps)`,
+                  payer.walletNumber && `Mobile (${payer.walletApps.length} apps)`,
                   payer.iban && "Bank",
                   payer.acceptsCash && "Cash",
                 ]

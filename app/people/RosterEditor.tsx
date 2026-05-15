@@ -259,16 +259,16 @@ function FormCard({
       <div className="divider-dots" />
 
       <div className="space-y-4">
-        <div className="eyebrow">MOBILE WALLET</div>
+        <div className="eyebrow">MOBILE NUMBER</div>
         <F
-          label="WALLET NUMBER"
+          label="MOBILE NUMBER"
           value={form.walletNumber}
           onChange={(v) => set({ walletNumber: v })}
           placeholder="03xx-xxxxxxx"
         />
         {form.walletNumber && (
           <div>
-            <div className="eyebrow mb-2">WORKS WITH</div>
+            <div className="eyebrow mb-2">APPS THAT USE THIS NUMBER</div>
             <div className="flex flex-wrap gap-2">
               {WALLET_APPS.map((app) => {
                 const on = form.walletApps.includes(app.id);

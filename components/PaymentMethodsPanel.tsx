@@ -31,17 +31,22 @@ export function PaymentMethodsPanel({ payer }: { payer: Payer }) {
       ) : (
         <div className="space-y-5 max-w-[440px] mx-auto">
           {payer.walletNumber && (
-            <PayBlock label="MOBILE WALLET" value={payer.walletNumber}>
+            <PayBlock label="MOBILE NUMBER" value={payer.walletNumber}>
               {payer.walletApps.length > 0 && (
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {payer.walletApps.map((a) => (
-                    <span
-                      key={a}
-                      className="text-[10px] tracking-wider font-mono uppercase px-2 py-0.5 border border-ink/40"
-                    >
-                      {labelFor(a)}
-                    </span>
-                  ))}
+                <div className="mt-2">
+                  <div className="text-[10px] tracking-wider font-mono uppercase text-ink-faint mb-1.5">
+                    USE WITH:
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {payer.walletApps.map((a) => (
+                      <span
+                        key={a}
+                        className="text-[10px] tracking-wider font-mono uppercase px-2 py-0.5 border border-ink/40"
+                      >
+                        {labelFor(a)}
+                      </span>
+                    ))}
+                  </div>
                 </div>
               )}
             </PayBlock>

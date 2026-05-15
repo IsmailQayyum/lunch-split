@@ -10,7 +10,7 @@ export function slackShareText(t: Ticket, ticketUrl: string): string {
   if (splits) lines.push(splits);
   if (t.payer.walletNumber) {
     const apps = t.payer.walletApps.length > 0 ? ` (${t.payer.walletApps.join(", ")})` : "";
-    lines.push(`💸 Wallet: \`${t.payer.walletNumber}\`${apps}`);
+    lines.push(`📱 Mobile: \`${t.payer.walletNumber}\`${apps}`);
   }
   if (t.payer.iban) lines.push(`🏦 Bank: \`${t.payer.iban}\``);
   lines.push("");

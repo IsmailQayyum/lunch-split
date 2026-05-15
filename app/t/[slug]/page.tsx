@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { getTicket } from "@/lib/store";
+import { findPersonByEmail, getRoster } from "@/lib/store-roster";
 import { slackShareText, shortShareText } from "@/lib/share-text";
+import type { PayerProfile } from "@/lib/types";
 import { PaymentMethodsPanel } from "@/components/PaymentMethodsPanel";
 import { ParticipantRow } from "@/components/ParticipantRow";
 import { CloseTicketButton } from "@/components/CloseTicketButton";
@@ -52,6 +54,25 @@ export default async function TicketPage({
   const ticket = await getTicket(slug);
   if (!ticket) notFound();
 
+  // Pull the payer's *current* payment methods from the roster so updates
+  // there reflect on every ticket they're paying. Fall back to the snapshot
+  // taken when the ticket was created if they're no longer in the roster.
+  const roster = await getRoster();
+  const liveMatch = findPersonByEmail(roster, ticket.payer.email);
+  const effectivePayer: PayerProfile = liveMatch
+    ? {
+        name: liveMatch.name,
+        email: liveMatch.email,
+        whatsapp: liveMatch.whatsapp,
+        walletNumber: liveMatch.walletNumber,
+        walletApps: liveMatch.walletApps,
+        iban: liveMatch.iban,
+        accountTitle: liveMatch.accountTitle,
+        acceptsCash: liveMatch.acceptsCash,
+      }
+    : ticket.payer;
+  const liveTicket = { ...ticket, payer: effectivePayer };
+
   const pendingCount = ticket.participants.filter(
     (r) => r.status === "pending" || r.status === "self_marked",
   ).length;
@@ -67,8 +88,8 @@ export default async function TicketPage({
 
   const appUrl = process.env.APP_URL ?? "";
   const ticketUrl = `${appUrl}/t/${slug}`;
-  const slackText = slackShareText(ticket, ticketUrl);
-  const shortText = shortShareText(ticket, ticketUrl);
+  const slackText = slackShareText(liveTicket, ticketUrl);
+  const shortText = shortShareText(liveTicket, ticketUrl);
   const justCreated = created === "1";
 
   const suggestedAmount =
@@ -112,7 +133,7 @@ export default async function TicketPage({
         </div>
         <div className="text-[12px] text-ink-soft mt-4">
           SERVED BY{" "}
-          <span className="display-italic text-[18px] mx-1">{ticket.payer.name}</span>
+          <span className="display-italic text-[18px] mx-1">{effectivePayer.name}</span>
         </div>
       </header>
 
@@ -159,7 +180,7 @@ export default async function TicketPage({
               slug={slug}
               ticketUrl={ticketUrl}
               ticketTitle={ticket.title}
-              payerName={ticket.payer.name}
+              payerName={effectivePayer.name}
               participant={{
                 id: p.id,
                 name: p.name,
@@ -199,12 +220,12 @@ export default async function TicketPage({
       {/* Payment */}
       <PaymentMethodsPanel
         payer={{
-          name: ticket.payer.name,
-          walletNumber: ticket.payer.walletNumber,
-          walletApps: ticket.payer.walletApps ?? [],
-          iban: ticket.payer.iban,
-          accountTitle: ticket.payer.accountTitle,
-          acceptsCash: ticket.payer.acceptsCash,
+          name: effectivePayer.name,
+          walletNumber: effectivePayer.walletNumber,
+          walletApps: effectivePayer.walletApps ?? [],
+          iban: effectivePayer.iban,
+          accountTitle: effectivePayer.accountTitle,
+          acceptsCash: effectivePayer.acceptsCash,
         }}
       />
 
