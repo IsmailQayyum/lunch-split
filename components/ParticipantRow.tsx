@@ -3,26 +3,30 @@
 import { useState, useTransition } from "react";
 import { Button } from "./ui/button";
 import { formatMoney, relativeTime } from "@/lib/utils";
+import { normalizeWhatsapp, whatsappUrl, reminderText } from "@/lib/whatsapp";
 import {
   markPaidAction,
   confirmPaidAction,
   markCashAction,
-  remindAction,
+  remindEmailAction,
+  logWhatsappReminderAction,
   removeParticipantAction,
   reopenParticipantAction,
 } from "@/lib/actions/tickets";
 
 type Props = {
   slug: string;
+  ticketUrl: string;
+  ticketTitle: string;
+  payerName: string;
   participant: {
     id: string;
-    guestName: string;
-    pendingEmail: string | null;
+    name: string;
+    email: string | null;
+    whatsapp: string | null;
     amountOwed: number;
     status: "pending" | "self_marked" | "confirmed" | "cash";
-    isMe: boolean;
   };
-  isPayer: boolean;
   ticketOpen: boolean;
   currency: string;
   lastRemindedAt: Date | null;
@@ -30,8 +34,10 @@ type Props = {
 
 export function ParticipantRow({
   slug,
+  ticketUrl,
+  ticketTitle,
+  payerName,
   participant,
-  isPayer,
   ticketOpen,
   currency,
   lastRemindedAt,
@@ -41,6 +47,7 @@ export function ParticipantRow({
   const [menuOpen, setMenuOpen] = useState(false);
 
   const settled = participant.status === "confirmed" || participant.status === "cash";
+  const waNumber = normalizeWhatsapp(participant.whatsapp);
 
   function run(fn: () => Promise<unknown>) {
     setErr(null);
@@ -53,8 +60,22 @@ export function ParticipantRow({
     });
   }
 
-  const recentlyReminded =
-    lastRemindedAt && Date.now() - lastRemindedAt.getTime() < 60 * 60 * 1000;
+  function openWhatsapp() {
+    if (!waNumber) return;
+    const url = whatsappUrl(
+      waNumber,
+      reminderText({
+        payerName,
+        ticketTitle,
+        amount: String(participant.amountOwed),
+        ticketUrl,
+        currency,
+      }),
+    );
+    window.open(url, "_blank", "noopener,noreferrer");
+    // Log async, no await
+    void logWhatsappReminderAction(slug, participant.id);
+  }
 
   return (
     <div
@@ -63,12 +84,10 @@ export function ParticipantRow({
       }`}
     >
       <div className="min-w-0 flex-1">
-        <div className="font-medium truncate">
-          {participant.guestName}
-          {participant.isMe && <span className="ml-2 text-xs text-muted">(you)</span>}
-        </div>
+        <div className="font-medium truncate">{participant.name}</div>
         <div className="text-xs text-muted mt-0.5 truncate">
-          {participant.pendingEmail} ·{" "}
+          {[participant.whatsapp, participant.email].filter(Boolean).join(" · ") || "no contact"}{" "}
+          ·{" "}
           <span
             className={
               participant.status === "confirmed" || participant.status === "cash"
@@ -89,25 +108,22 @@ export function ParticipantRow({
           {formatMoney(participant.amountOwed, currency)}
         </div>
 
-        {/* Participant self-actions */}
-        {participant.isMe && !settled && ticketOpen && (
-          <Button
-            size="sm"
-            onClick={() => run(() => markPaidAction(slug, participant.id))}
-            disabled={pending || participant.status === "self_marked"}
-          >
-            {participant.status === "self_marked" ? "Awaiting confirm" : "I paid"}
-          </Button>
-        )}
-
-        {/* Payer actions */}
-        {isPayer && !settled && ticketOpen && (
+        {!settled && ticketOpen && (
           <>
+            <Button
+              size="sm"
+              onClick={() => run(() => markPaidAction(slug, participant.id))}
+              disabled={pending || participant.status === "self_marked"}
+              title="Mark this person as paid (anyone can do this)"
+            >
+              {participant.status === "self_marked" ? "Awaiting confirm" : "I paid"}
+            </Button>
             <Button
               size="sm"
               variant="outline"
               onClick={() => run(() => confirmPaidAction(slug, participant.id))}
               disabled={pending}
+              title="Payer: confirm receipt"
             >
               Confirm
             </Button>
@@ -121,7 +137,25 @@ export function ParticipantRow({
                 ⋯
               </Button>
               {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 w-44 rounded-lg border border-border bg-bg shadow-lg z-10 text-sm">
+                <div className="absolute right-0 top-full mt-1 w-52 rounded-lg border border-border bg-bg shadow-lg z-10 text-sm">
+                  <MenuItem
+                    disabled={!waNumber}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      openWhatsapp();
+                    }}
+                  >
+                    {waNumber ? "Nudge on WhatsApp" : "No WhatsApp on file"}
+                  </MenuItem>
+                  <MenuItem
+                    disabled={!participant.email}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      run(() => remindEmailAction(slug, participant.id));
+                    }}
+                  >
+                    {participant.email ? "Send reminder email" : "No email on file"}
+                  </MenuItem>
                   <MenuItem
                     onClick={() => {
                       setMenuOpen(false);
@@ -131,17 +165,6 @@ export function ParticipantRow({
                     Mark cash paid
                   </MenuItem>
                   <MenuItem
-                    disabled={!!recentlyReminded}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      run(() => remindAction(slug, participant.id));
-                    }}
-                  >
-                    {recentlyReminded
-                      ? `Reminded ${relativeTime(lastRemindedAt!)}`
-                      : "Send reminder email"}
-                  </MenuItem>
-                  <MenuItem
                     onClick={() => {
                       setMenuOpen(false);
                       run(() => removeParticipantAction(slug, participant.id));
@@ -149,14 +172,18 @@ export function ParticipantRow({
                   >
                     Remove
                   </MenuItem>
+                  {lastRemindedAt && (
+                    <div className="px-3 py-2 text-xs text-muted border-t border-border">
+                      Last nudged {relativeTime(lastRemindedAt)}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           </>
         )}
 
-        {/* Payer reopen for already-settled rows */}
-        {isPayer && settled && (
+        {settled && ticketOpen && (
           <Button
             size="sm"
             variant="ghost"

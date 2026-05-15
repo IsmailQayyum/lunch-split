@@ -11,3 +11,5 @@ build
 .turbo
 drizzle/meta
 next-env.d.ts
+
+.vercel

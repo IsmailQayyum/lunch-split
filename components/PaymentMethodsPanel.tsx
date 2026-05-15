@@ -3,58 +3,38 @@
 import { useState } from "react";
 import { Card } from "./ui/card";
 import { Button } from "./ui/button";
-import { formatMoney } from "@/lib/utils";
 
 type Payer = {
   name: string;
-  jazzcashNumber: string | null;
-  easypaisaNumber: string | null;
-  bankIban: string | null;
-  bankAccountTitle: string | null;
+  jazzcash: string | null;
+  easypaisa: string | null;
+  iban: string | null;
+  accountTitle: string | null;
   acceptsCash: boolean;
 };
 
-export function PaymentMethodsPanel({
-  payer,
-  amount,
-  currency,
-}: {
-  payer: Payer;
-  amount: number | null;
-  currency: string;
-}) {
-  const hasAny =
-    payer.jazzcashNumber || payer.easypaisaNumber || payer.bankIban || payer.acceptsCash;
+export function PaymentMethodsPanel({ payer }: { payer: Payer }) {
+  const hasAny = payer.jazzcash || payer.easypaisa || payer.iban || payer.acceptsCash;
 
   return (
     <Card className="mb-6">
-      <div className="flex items-baseline justify-between mb-3">
-        <div>
-          <div className="text-xs uppercase tracking-wider text-muted">You owe</div>
-          <div className="text-3xl font-semibold">
-            {amount != null ? formatMoney(amount, currency) : "—"}
-          </div>
-        </div>
-        <div className="text-sm text-muted">Send to {payer.name}</div>
+      <div className="text-xs uppercase tracking-wider text-muted mb-3">
+        Send payment to {payer.name}
       </div>
       {!hasAny ? (
-        <p className="text-sm text-muted">{payer.name} hasn't added payment details yet.</p>
+        <p className="text-sm text-muted">{payer.name} didn't add payment details.</p>
       ) : (
         <div className="space-y-2">
-          {payer.jazzcashNumber && (
-            <CopyRow label="JazzCash" value={payer.jazzcashNumber} />
-          )}
-          {payer.easypaisaNumber && (
-            <CopyRow label="EasyPaisa" value={payer.easypaisaNumber} />
-          )}
-          {payer.bankIban && (
+          {payer.jazzcash && <CopyRow label="JazzCash" value={payer.jazzcash} />}
+          {payer.easypaisa && <CopyRow label="EasyPaisa" value={payer.easypaisa} />}
+          {payer.iban && (
             <CopyRow
-              label={payer.bankAccountTitle ? `Bank (${payer.bankAccountTitle})` : "Bank"}
-              value={payer.bankIban}
+              label={payer.accountTitle ? `Bank (${payer.accountTitle})` : "Bank"}
+              value={payer.iban}
             />
           )}
           {payer.acceptsCash && (
-            <div className="text-sm text-muted italic">Cash is fine too.</div>
+            <div className="text-sm text-muted italic">Cash on the spot is fine.</div>
           )}
         </div>
       )}
@@ -66,9 +46,9 @@ function CopyRow({ label, value }: { label: string; value: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="flex items-center justify-between rounded-lg bg-border/30 px-3 py-2">
-      <div className="text-sm">
+      <div className="text-sm min-w-0 flex-1">
         <span className="text-muted mr-2">{label}</span>
-        <span className="font-mono">{value}</span>
+        <span className="font-mono break-all">{value}</span>
       </div>
       <Button
         size="sm"

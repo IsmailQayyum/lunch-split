@@ -6,7 +6,6 @@ import {
   pgTable,
   text,
   timestamp,
-  unique,
   uuid,
 } from "drizzle-orm/pg-core";
 
@@ -18,41 +17,36 @@ export const participantStatusEnum = pgEnum("participant_status", [
   "cash",
 ]);
 
-export const users = pgTable("users", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  googleSub: text("google_sub").unique(),
-  email: text("email").notNull().unique(),
-  name: text("name"),
-  image: text("image"),
-  jazzcashNumber: text("jazzcash_number"),
-  easypaisaNumber: text("easypaisa_number"),
-  bankIban: text("bank_iban"),
-  bankAccountTitle: text("bank_account_title"),
-  acceptsCash: boolean("accepts_cash").notNull().default(true),
-  slackUserId: text("slack_user_id"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
+// Tickets carry the payer's contact + payment details inline.
+// No user accounts. Trust model: anyone with the slug URL can view and act.
 export const tickets = pgTable(
   "tickets",
   {
     id: uuid("id").defaultRandom().primaryKey(),
     slug: text("slug").notNull().unique(),
-    payerId: uuid("payer_id")
-      .notNull()
-      .references(() => users.id),
+
     title: text("title").notNull(),
     totalAmount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
     currency: text("currency").notNull().default("PKR"),
-    receiptUrl: text("receipt_url"),
     notes: text("notes"),
+
+    payerName: text("payer_name").notNull(),
+    payerEmail: text("payer_email"),
+    payerWhatsapp: text("payer_whatsapp"),
+
+    payerJazzcash: text("payer_jazzcash"),
+    payerEasypaisa: text("payer_easypaisa"),
+    payerIban: text("payer_iban"),
+    payerAccountTitle: text("payer_account_title"),
+    payerAcceptsCash: boolean("payer_accepts_cash").notNull().default(true),
+
     status: ticketStatusEnum("status").notNull().default("open"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     closedAt: timestamp("closed_at", { withTimezone: true }),
   },
   (t) => ({
-    payerIdx: index("tickets_payer_idx").on(t.payerId),
     statusIdx: index("tickets_status_idx").on(t.status),
+    createdIdx: index("tickets_created_idx").on(t.createdAt),
   }),
 );
 
@@ -63,21 +57,16 @@ export const participants = pgTable(
     ticketId: uuid("ticket_id")
       .notNull()
       .references(() => tickets.id, { onDelete: "cascade" }),
-    userId: uuid("user_id").references(() => users.id),
-    pendingEmail: text("pending_email"),
-    pendingSlackId: text("pending_slack_id"),
-    guestName: text("guest_name").notNull(),
+    name: text("name").notNull(),
+    email: text("email"),
+    whatsapp: text("whatsapp"),
     amountOwed: numeric("amount_owed", { precision: 12, scale: 2 }).notNull(),
     status: participantStatusEnum("status").notNull().default("pending"),
     selfMarkedAt: timestamp("self_marked_at", { withTimezone: true }),
     confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
-    proofUrl: text("proof_url"),
   },
   (t) => ({
     ticketIdx: index("participants_ticket_idx").on(t.ticketId),
-    userIdx: index("participants_user_idx").on(t.userId),
-    uniqUser: unique("participants_ticket_user_unique").on(t.ticketId, t.userId),
-    uniqEmail: unique("participants_ticket_email_unique").on(t.ticketId, t.pendingEmail),
   }),
 );
 
@@ -89,15 +78,13 @@ export const reminderLog = pgTable(
       .notNull()
       .references(() => participants.id, { onDelete: "cascade" }),
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
-    channel: text("channel").notNull().default("email"),
+    channel: text("channel").notNull().default("whatsapp"),
   },
   (t) => ({
     participantIdx: index("reminder_log_participant_idx").on(t.participantId),
   }),
 );
 
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
 export type Ticket = typeof tickets.$inferSelect;
 export type NewTicket = typeof tickets.$inferInsert;
 export type Participant = typeof participants.$inferSelect;

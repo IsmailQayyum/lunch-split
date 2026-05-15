@@ -1,47 +1,33 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
 import { z } from "zod";
 
 import { db } from "@/lib/db";
-import { participants, tickets, users } from "@/lib/db/schema";
+import { participants, tickets } from "@/lib/db/schema";
 import { newSlug } from "@/lib/slug";
 import { splitEvenly } from "@/lib/shares";
 
-const ALLOWED = process.env.ALLOWED_EMAIL_DOMAIN ?? "puresquare.com";
-
 const payloadSchema = z.object({
-  payerEmail: z.string().email(),
-  payerName: z.string().optional(),
-  payerSlackId: z.string().optional(),
   title: z.string().min(1).max(120),
   totalAmount: z.coerce.number().positive(),
   notes: z.string().max(500).optional().nullable(),
+
+  payerName: z.string().min(1).max(80),
+  payerEmail: z.string().email().optional().nullable(),
+  payerWhatsapp: z.string().max(40).optional().nullable(),
+  payerJazzcash: z.string().max(40).optional().nullable(),
+  payerEasypaisa: z.string().max(40).optional().nullable(),
+  payerIban: z.string().max(40).optional().nullable(),
+
   participants: z
     .array(
       z.object({
-        email: z.string().email(),
-        name: z.string().optional(),
-        slackId: z.string().optional(),
+        name: z.string().min(1).max(80),
+        email: z.string().email().optional().nullable(),
+        whatsapp: z.string().max(40).optional().nullable(),
       }),
     )
     .min(1),
 });
-
-async function getOrCreateUser(email: string, name?: string, slackId?: string) {
-  const lower = email.toLowerCase();
-  const existing = await db.query.users.findFirst({ where: eq(users.email, lower) });
-  if (existing) {
-    if (slackId && !existing.slackUserId) {
-      await db.update(users).set({ slackUserId: slackId }).where(eq(users.id, existing.id));
-    }
-    return existing;
-  }
-  const [created] = await db
-    .insert(users)
-    .values({ email: lower, name: name ?? null, slackUserId: slackId ?? null })
-    .returning();
-  return created;
-}
 
 export async function POST(req: Request) {
   const expected = process.env.SLACK_WORKFLOW_SECRET;
@@ -59,34 +45,15 @@ export async function POST(req: Request) {
 
   const parsed = payloadSchema.safeParse(body);
   if (!parsed.success) {
-    return NextResponse.json({ error: "bad_payload", details: parsed.error.flatten() }, {
-      status: 400,
-    });
+    return NextResponse.json(
+      { error: "bad_payload", details: parsed.error.flatten() },
+      { status: 400 },
+    );
   }
   const data = parsed.data;
 
-  // Domain check on all emails
-  const allEmails = [data.payerEmail, ...data.participants.map((p) => p.email)];
-  for (const e of allEmails) {
-    if (!e.toLowerCase().endsWith(`@${ALLOWED}`)) {
-      return NextResponse.json({ error: `email_not_in_${ALLOWED}` }, { status: 400 });
-    }
-  }
-
-  // Resolve payer + participants
-  const payer = await getOrCreateUser(data.payerEmail, data.payerName, data.payerSlackId);
-  const otherList = data.participants.filter(
-    (p) => p.email.toLowerCase() !== data.payerEmail.toLowerCase(),
-  );
-  if (otherList.length === 0) {
-    return NextResponse.json({ error: "no_other_participants" }, { status: 400 });
-  }
-  const otherUsers = await Promise.all(
-    otherList.map((p) => getOrCreateUser(p.email, p.name, p.slackId)),
-  );
-
   const total = Math.round(data.totalAmount);
-  const shares = splitEvenly(total, otherUsers.length);
+  const shares = splitEvenly(total, data.participants.length);
   const slug = newSlug();
 
   await db.transaction(async (tx) => {
@@ -94,19 +61,23 @@ export async function POST(req: Request) {
       .insert(tickets)
       .values({
         slug,
-        payerId: payer.id,
         title: data.title,
         totalAmount: String(total),
         notes: data.notes ?? null,
+        payerName: data.payerName,
+        payerEmail: data.payerEmail ?? null,
+        payerWhatsapp: data.payerWhatsapp ?? null,
+        payerJazzcash: data.payerJazzcash ?? null,
+        payerEasypaisa: data.payerEasypaisa ?? null,
+        payerIban: data.payerIban ?? null,
       })
       .returning();
     await tx.insert(participants).values(
-      otherUsers.map((u, i) => ({
+      data.participants.map((p, i) => ({
         ticketId: t.id,
-        userId: u.id,
-        pendingEmail: u.email,
-        pendingSlackId: u.slackUserId,
-        guestName: u.name ?? u.email.split("@")[0],
+        name: p.name,
+        email: p.email ?? null,
+        whatsapp: p.whatsapp ?? null,
         amountOwed: String(shares[i]),
       })),
     );
@@ -120,6 +91,6 @@ export async function POST(req: Request) {
     slug,
     title: data.title,
     total,
-    participantCount: otherUsers.length,
+    participantCount: data.participants.length,
   });
 }
