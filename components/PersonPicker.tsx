@@ -43,6 +43,8 @@ export function PersonPicker({ roster, selectedIds, onToggle, onAdded }: Props) 
     });
   }
 
+  const selectedCount = selectedIds.length;
+
   return (
     <div className="space-y-4">
       {roster.length === 0 && !adding && (
@@ -52,33 +54,68 @@ export function PersonPicker({ roster, selectedIds, onToggle, onAdded }: Props) 
       )}
 
       {roster.length > 0 && (
-        <div className="flex flex-wrap gap-2">
-          {roster.map((p) => {
-            const on = selectedIds.includes(p.id);
-            return (
+        <>
+          <div className="flex items-center justify-between text-[11px] tracking-wider font-mono">
+            <span className="eyebrow">{selectedCount} OF {roster.length} SELECTED</span>
+            {selectedCount > 0 && (
               <button
-                key={p.id}
                 type="button"
-                onClick={() => onToggle(p.id)}
-                className={`group relative px-3 py-1.5 border-[1.5px] transition-all duration-150 font-mono ${
-                  on
-                    ? "bg-ink text-paper-light border-ink"
-                    : "bg-transparent text-ink border-ink-faint hover:border-ink"
-                }`}
-                aria-pressed={on}
+                className="eyebrow ink-link"
+                onClick={() => selectedIds.forEach(onToggle)}
               >
-                <span className="display-italic text-[17px] leading-none">{p.name}</span>
-                <span
-                  className={`ml-1.5 text-[10px] font-mono tracking-wide align-middle ${
-                    on ? "text-paper-light/70" : "text-ink-faint"
-                  }`}
-                >
-                  {on ? "✓" : "+"}
-                </span>
+                CLEAR
               </button>
-            );
-          })}
-        </div>
+            )}
+          </div>
+          <ul className="border-t border-dashed border-ink-faint/50">
+            {roster.map((p) => {
+              const on = selectedIds.includes(p.id);
+              return (
+                <li
+                  key={p.id}
+                  className="border-b border-dashed border-ink-faint/50"
+                >
+                  <button
+                    type="button"
+                    onClick={() => onToggle(p.id)}
+                    className={`w-full text-left transition-colors py-2.5 group ${
+                      on ? "" : "hover:text-saffron"
+                    }`}
+                    aria-pressed={on}
+                  >
+                    <div className="line-item">
+                      <span
+                        className={`display-italic text-[20px] truncate ${
+                          on ? "text-ink" : "text-ink-soft"
+                        }`}
+                      >
+                        {p.name}
+                      </span>
+                      <span className="leader" />
+                      <span className="flex items-center gap-2 shrink-0">
+                        {p.whatsapp && (
+                          <span className="text-[10px] font-mono text-ink-faint hidden sm:inline">
+                            {p.whatsapp}
+                          </span>
+                        )}
+                        <span
+                          className={`inline-flex items-center justify-center w-5 h-5 border-[1.5px] border-ink transition-all ${
+                            on ? "bg-ink" : "bg-transparent"
+                          }`}
+                          aria-hidden
+                        >
+                          {on && (
+                            <span className="text-paper-light text-[11px] leading-none">✓</span>
+                          )}
+                        </span>
+                      </span>
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
 
       {!adding ? (

@@ -135,25 +135,44 @@ export function NewTicketForm({
           </div>
         ) : (
           <>
-            <div className="flex flex-wrap gap-2">
+            <ul className="border-t border-dashed border-ink-faint/50">
               {roster.map((p) => {
                 const on = payerId === p.id;
                 return (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => selectAsPayer(p.id)}
-                    className={`px-3 py-1.5 border-[1.5px] transition-all duration-150 ${
-                      on
-                        ? "bg-saffron text-paper-light border-saffron"
-                        : "border-ink-faint hover:border-ink"
-                    }`}
-                  >
-                    <span className="display-italic text-[17px] leading-none">{p.name}</span>
-                  </button>
+                  <li key={p.id} className="border-b border-dashed border-ink-faint/50">
+                    <button
+                      type="button"
+                      onClick={() => selectAsPayer(p.id)}
+                      className={`w-full text-left transition-colors py-2.5 group ${
+                        on ? "" : "hover:text-saffron"
+                      }`}
+                      aria-pressed={on}
+                    >
+                      <div className="line-item">
+                        <span
+                          className={`display-italic text-[20px] truncate ${
+                            on ? "text-saffron" : "text-ink-soft"
+                          }`}
+                        >
+                          {p.name}
+                        </span>
+                        <span className="leader" />
+                        <span
+                          className={`inline-flex items-center justify-center w-5 h-5 rounded-full border-[1.5px] transition-all shrink-0 ${
+                            on ? "border-saffron bg-saffron" : "border-ink-faint"
+                          }`}
+                          aria-hidden
+                        >
+                          {on && (
+                            <span className="w-2 h-2 rounded-full bg-paper-light"></span>
+                          )}
+                        </span>
+                      </div>
+                    </button>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
             {payer && !payerHasMethod && (
               <div className="mt-4 text-[12px] text-saffron italic">
                 Heads up — {payer.name} has no payment methods saved.{" "}
