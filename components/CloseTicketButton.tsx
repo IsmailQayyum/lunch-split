@@ -15,6 +15,7 @@ export function CloseTicketButton({
   return (
     <Button
       variant={status === "open" ? "outline" : "default"}
+      size="sm"
       onClick={() =>
         startTransition(async () => {
           if (status === "open") await closeTicketAction(slug);
@@ -23,7 +24,7 @@ export function CloseTicketButton({
       }
       disabled={pending}
     >
-      {pending ? "Saving…" : status === "open" ? "Close ticket" : "Reopen ticket"}
+      {pending ? "Saving…" : status === "open" ? "Tear off & close" : "Reopen ticket"}
     </Button>
   );
 }

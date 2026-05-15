@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Card } from "./ui/card";
 
 type Entry = { slug: string; title: string; visited: number };
 
@@ -32,19 +31,37 @@ export function recordVisit(slug: string, title: string) {
   } catch {}
 }
 
+function relTime(ts: number) {
+  const diff = (Date.now() - ts) / 1000;
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)} hr ago`;
+  return `${Math.floor(diff / 86400)} d ago`;
+}
+
 export function RecentTickets() {
   const items = useRecent();
   if (items.length === 0) return null;
   return (
     <div>
-      <h2 className="text-xs uppercase tracking-wider text-muted mb-3">From this browser</h2>
-      <div className="space-y-2">
-        {items.map((it) => (
-          <Link key={it.slug} href={`/t/${it.slug}`}>
-            <Card className="text-sm py-3 px-4 hover:bg-border/20 transition cursor-pointer">
-              {it.title}
-              <span className="text-muted text-xs ml-2">/{it.slug}</span>
-            </Card>
+      <div className="eyebrow text-center mb-4">YOUR DRAWER · LAST {items.length}</div>
+      <div className="space-y-1">
+        {items.map((it, i) => (
+          <Link
+            key={it.slug}
+            href={`/t/${it.slug}`}
+            className="block group animate-fade-up"
+            style={{ animationDelay: `${i * 60}ms` }}
+          >
+            <div className="line-item py-2 hover:text-saffron transition-colors">
+              <span className="text-sm">
+                <span className="display-italic text-[19px] mr-2">{it.title}</span>
+              </span>
+              <span className="leader" />
+              <span className="text-[11px] text-ink-faint group-hover:text-saffron">
+                {relTime(it.visited)} · /{it.slug}
+              </span>
+            </div>
           </Link>
         ))}
       </div>

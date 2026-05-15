@@ -3,31 +3,410 @@
 @tailwind utilities;
 
 :root {
-  --bg: 250 249 245;
-  --fg: 18 18 18;
-  --muted: 110 110 110;
-  --border: 230 228 222;
-  --accent: 24 95 72;
+  --paper: #ede2c8;
+  --paper-light: #f5ebd3;
+  --paper-deep: #e2d6b5;
+  --ink: #1a1610;
+  --ink-soft: #4e4133;
+  --ink-faint: #92806a;
+  --saffron: #c7472a;
+  --moss: #4a6f3a;
+  --rust: #9c3f2a;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: 14 14 14;
-    --fg: 240 240 240;
-    --muted: 150 150 150;
-    --border: 38 38 38;
-    --accent: 76 205 158;
+@layer base {
+  html {
+    background-color: var(--paper);
+  }
+  html,
+  body {
+    color: var(--ink);
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 14px;
+    line-height: 1.55;
+    font-feature-settings:
+      "ss01" on,
+      "calt" on;
+  }
+  body {
+    background-color: var(--paper);
+    background-image:
+      radial-gradient(ellipse 90% 70% at 50% -10%, rgba(255, 248, 230, 0.7), transparent 60%),
+      radial-gradient(ellipse 70% 50% at 80% 110%, rgba(199, 71, 42, 0.06), transparent 60%),
+      url("data:image/svg+xml;utf8,<svg viewBox='0 0 240 240' xmlns='http://www.w3.org/2000/svg'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.10 0 0 0 0 0.09 0 0 0 0 0.07 0 0 0 0.25 0'/></filter><rect width='240' height='240' filter='url(%23n)'/></svg>");
+    background-blend-mode: normal, normal, multiply;
+    background-attachment: fixed, fixed, fixed;
+    min-height: 100vh;
+  }
+  ::selection {
+    background: var(--saffron);
+    color: var(--paper);
+  }
+  h1,
+  h2,
+  h3 {
+    font-family: var(--font-display), Fraunces, serif;
+    font-weight: 400;
+    letter-spacing: -0.015em;
+  }
+  *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  *::-webkit-scrollbar-thumb {
+    background: var(--ink-faint);
+    border-radius: 4px;
   }
 }
 
-html,
-body {
-  background: rgb(var(--bg));
-  color: rgb(var(--fg));
+@layer components {
+  /* Display heading utility */
+  .display {
+    font-family: var(--font-display), Fraunces, serif;
+    font-weight: 400;
+    line-height: 0.95;
+    letter-spacing: -0.02em;
+  }
+  .display-italic {
+    font-family: var(--font-display), Fraunces, serif;
+    font-style: italic;
+    font-weight: 400;
+    line-height: 0.95;
+    letter-spacing: -0.025em;
+  }
+
+  /* Eyebrow / kicker label */
+  .eyebrow {
+    font-family: var(--font-mono), monospace;
+    font-size: 10px;
+    letter-spacing: 0.28em;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    font-weight: 500;
+  }
+
+  /* Dotted divider (receipt style) */
+  .divider-dots {
+    height: 1px;
+    background-image: radial-gradient(circle, var(--ink-soft) 0.9px, transparent 1.2px);
+    background-size: 6px 1.5px;
+    background-repeat: repeat-x;
+    background-position: center;
+    opacity: 0.55;
+  }
+  .divider-solid {
+    border-top: 1px solid var(--ink);
+  }
+  .divider-double {
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--ink);
+    height: 4px;
+  }
+
+  /* Itemized line with dot leaders: name ........ amount */
+  .line-item {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+  }
+  .line-item > .leader {
+    flex: 1;
+    border-bottom: 1.5px dotted var(--ink-faint);
+    margin-bottom: 4px;
+    min-width: 8px;
+    opacity: 0.7;
+  }
+
+  /* PAID-style stamp */
+  .stamp {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border: 1.5px solid currentColor;
+    border-radius: 3px;
+    font-family: var(--font-mono), monospace;
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    position: relative;
+    transform: rotate(-3deg);
+    opacity: 0.92;
+  }
+  .stamp::before {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border: 1px solid currentColor;
+    border-radius: 5px;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .stamp-straight {
+    transform: rotate(0);
+  }
+
+  /* Faux barcode */
+  .barcode {
+    height: 40px;
+    background-image: repeating-linear-gradient(
+      90deg,
+      var(--ink) 0,
+      var(--ink) 1px,
+      transparent 1px,
+      transparent 3px,
+      var(--ink) 3px,
+      var(--ink) 4px,
+      transparent 4px,
+      transparent 5px,
+      var(--ink) 5px,
+      var(--ink) 8px,
+      transparent 8px,
+      transparent 10px,
+      var(--ink) 10px,
+      var(--ink) 11px,
+      transparent 11px,
+      transparent 14px,
+      var(--ink) 14px,
+      var(--ink) 17px,
+      transparent 17px,
+      transparent 19px
+    );
+  }
+
+  /* Paper sheet card (used sparingly — the page is already paper) */
+  .sheet {
+    background: var(--paper-light);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 252, 240, 0.6),
+      0 1px 0 rgba(26, 22, 16, 0.07),
+      0 28px 56px -36px rgba(26, 22, 16, 0.35);
+    padding: 28px 24px;
+    position: relative;
+  }
+
+  /* Top + bottom serrated edge for receipt feel */
+  .serrated-top {
+    --tooth: 7px;
+    height: var(--tooth);
+    background-color: var(--paper-light);
+    -webkit-mask: radial-gradient(
+        circle calc(var(--tooth) - 1px) at 50% 0,
+        transparent 98%,
+        #000
+      )
+      50% 0 / calc(var(--tooth) * 2) 100%;
+    mask: radial-gradient(circle calc(var(--tooth) - 1px) at 50% 0, transparent 98%, #000) 50% 0 /
+      calc(var(--tooth) * 2) 100%;
+  }
+  .serrated-bottom {
+    --tooth: 7px;
+    height: var(--tooth);
+    background-color: var(--paper-light);
+    -webkit-mask: radial-gradient(
+        circle calc(var(--tooth) - 1px) at 50% 100%,
+        transparent 98%,
+        #000
+      )
+      50% 100% / calc(var(--tooth) * 2) 100%;
+    mask: radial-gradient(
+        circle calc(var(--tooth) - 1px) at 50% 100%,
+        transparent 98%,
+        #000
+      )
+      50% 100% / calc(var(--tooth) * 2) 100%;
+  }
+
+  /* Underline-only input */
+  .field-underline {
+    background: transparent;
+    border: none;
+    border-bottom: 1.5px solid var(--ink);
+    border-radius: 0;
+    padding: 8px 2px;
+    font-family: var(--font-mono), monospace;
+    font-size: 14px;
+    width: 100%;
+    color: var(--ink);
+    transition: border-color 150ms;
+  }
+  .field-underline:focus {
+    outline: none;
+    border-bottom-color: var(--saffron);
+  }
+  .field-underline::placeholder {
+    color: var(--ink-faint);
+    opacity: 0.7;
+  }
+  .field-underline[type="number"] {
+    font-feature-settings: "tnum" on;
+  }
+
+  /* Receipt button */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 18px;
+    font-family: var(--font-mono), monospace;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    border: 1.5px solid var(--ink);
+    background: var(--ink);
+    color: var(--paper-light);
+    cursor: pointer;
+    transition:
+      transform 100ms,
+      background 150ms,
+      color 150ms;
+  }
+  .btn:hover {
+    background: var(--saffron);
+    border-color: var(--saffron);
+  }
+  .btn:active {
+    transform: translateY(1px);
+  }
+  .btn:disabled {
+    opacity: 0.45;
+    pointer-events: none;
+  }
+  .btn-outline {
+    background: transparent;
+    color: var(--ink);
+    border-color: var(--ink);
+  }
+  .btn-outline:hover {
+    background: var(--ink);
+    color: var(--paper-light);
+  }
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink);
+    border-color: transparent;
+  }
+  .btn-ghost:hover {
+    background: var(--paper-deep);
+    border-color: var(--paper-deep);
+    color: var(--ink);
+  }
+  .btn-sm {
+    padding: 6px 12px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+  }
+  .btn-lg {
+    padding: 14px 26px;
+    font-size: 12px;
+  }
+
+  /* Tabular numerics everywhere amounts go */
+  .num {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" on;
+  }
 }
 
-* {
-  border-color: rgb(var(--border));
+@layer utilities {
+  .ink-link {
+    color: var(--ink);
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+    text-decoration-color: var(--ink-faint);
+  }
+  .ink-link:hover {
+    text-decoration-color: var(--saffron);
+    color: var(--saffron);
+  }
+}
+
+/* Animations: receipt printing in */
+@keyframes print-down {
+  0% {
+    clip-path: inset(0 0 100% 0);
+    opacity: 0.2;
+  }
+  100% {
+    clip-path: inset(0 0 0 0);
+    opacity: 1;
+  }
+}
+@keyframes stamp-in {
+  0% {
+    transform: scale(1.6) rotate(-12deg);
+    opacity: 0;
+  }
+  55% {
+    transform: scale(0.92) rotate(-1deg);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1) rotate(-3deg);
+    opacity: 0.92;
+  }
+}
+@keyframes pulse-dot {
+  0%,
+  100% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-print {
+  animation: print-down 700ms cubic-bezier(0.22, 0.72, 0.31, 1) both;
+}
+.animate-stamp {
+  animation: stamp-in 480ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.animate-pulse-dot {
+  animation: pulse-dot 1.8s ease-in-out infinite;
+}
+.animate-fade-up {
+  animation: fade-up 400ms ease-out both;
+}
+
+/* Stagger helpers */
+.stagger > * {
+  animation: fade-up 500ms ease-out both;
+}
+.stagger > *:nth-child(1) {
+  animation-delay: 60ms;
+}
+.stagger > *:nth-child(2) {
+  animation-delay: 120ms;
+}
+.stagger > *:nth-child(3) {
+  animation-delay: 180ms;
+}
+.stagger > *:nth-child(4) {
+  animation-delay: 240ms;
+}
+.stagger > *:nth-child(5) {
+  animation-delay: 300ms;
+}
+.stagger > *:nth-child(6) {
+  animation-delay: 360ms;
+}
+.stagger > *:nth-child(n + 7) {
+  animation-delay: 420ms;
 }
 
 input[type="number"]::-webkit-outer-spin-button,

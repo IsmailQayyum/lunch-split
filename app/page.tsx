@@ -1,32 +1,66 @@
 import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { RecentTickets } from "@/components/RecentTickets";
+
+function nowStamp() {
+  const d = new Date();
+  return d
+    .toLocaleString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    })
+    .toUpperCase();
+}
 
 export default function Home() {
   return (
-    <main className="max-w-2xl mx-auto px-6 py-12">
-      <header className="text-center space-y-3 mb-10">
-        <div className="text-5xl">🍱</div>
-        <h1 className="text-3xl font-semibold tracking-tight">Lunch Split</h1>
-        <p className="text-muted text-sm max-w-md mx-auto">
-          One person pays. Everyone settles up. Mark, confirm, nudge — close the loop without
-          chasing in DMs.
+    <main className="max-w-[520px] mx-auto px-5 pt-10 pb-16 animate-print">
+      {/* Letterhead */}
+      <header className="text-center stagger">
+        <div className="eyebrow">EST. 2026 · #SECURE-LUNCH-INTERNAL</div>
+        <h1 className="display-italic text-[80px] sm:text-[104px] mt-3 leading-[0.85]">
+          Lunch
+          <br />
+          Split.
+        </h1>
+        <p className="text-ink-soft text-[13px] mt-5 max-w-[320px] mx-auto">
+          One pays. The rest settle up. Track every rupee on a receipt that{" "}
+          <em className="display-italic">actually prints out.</em>
         </p>
       </header>
 
-      <div className="flex justify-center mb-8">
+      <div className="divider-dots my-10" />
+
+      {/* The order CTA */}
+      <div className="text-center">
         <Link href="/tickets/new">
-          <Button size="lg">+ New lunch ticket</Button>
+          <button className="btn btn-lg">↓ Punch a new ticket</button>
         </Link>
+        <p className="eyebrow mt-3">Takes ~ 20 SECONDS</p>
       </div>
 
+      <div className="divider-dots my-10" />
+
+      {/* Recent (localStorage) */}
       <RecentTickets />
 
-      <Card className="mt-10 text-xs text-muted">
-        No accounts, no sign-up. Anyone with a ticket link can view and act on it — same trust
-        model as a shared note. Built for #secure-lunch-internal.
-      </Card>
+      {/* Promo footer */}
+      <footer className="mt-16 text-center space-y-3">
+        <div className="divider-double max-w-[180px] mx-auto" />
+        <div className="eyebrow">SERVED COLD ·{" "}
+          <span className="text-saffron">NO ACCOUNTS</span> ·{" "}
+          <span className="text-saffron">NO SIGN-IN</span>
+        </div>
+        <p className="text-[11px] text-ink-faint max-w-[300px] mx-auto leading-relaxed">
+          Anyone with a ticket link can view and act on it. Same trust as a shared note in the
+          channel — built for the lunch crew, not for the world.
+        </p>
+        <div className="barcode max-w-[160px] mx-auto mt-6" />
+        <div className="eyebrow mt-1">PRINTED · {nowStamp()}</div>
+      </footer>
     </main>
   );
 }

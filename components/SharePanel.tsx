@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import QRCode from "qrcode";
-import { Card } from "./ui/card";
 import { Button } from "./ui/button";
 
 type Props = {
@@ -18,9 +17,9 @@ export function SharePanel({ ticketUrl, slackText, shortText }: Props) {
 
   useEffect(() => {
     QRCode.toDataURL(ticketUrl, {
-      width: 180,
+      width: 200,
       margin: 1,
-      color: { dark: "#111111", light: "#ffffff00" },
+      color: { dark: "#1a1610", light: "#00000000" },
     })
       .then(setQr)
       .catch(() => setQr(null));
@@ -34,7 +33,6 @@ export function SharePanel({ ticketUrl, slackText, shortText }: Props) {
   }
 
   function whatsappAny() {
-    // wa.me with no number = lets user pick contact/group on send
     window.open(
       `https://wa.me/?text=${encodeURIComponent(shortText)}`,
       "_blank",
@@ -51,48 +49,40 @@ export function SharePanel({ ticketUrl, slackText, shortText }: Props) {
   }
 
   return (
-    <Card className="mb-6 border-emerald-500/30 bg-emerald-500/5">
-      <div className="flex items-start gap-4">
+    <section className="mb-8 border-2 border-dashed border-saffron/60 bg-paper-light/60 p-5 sm:p-6 relative animate-fade-up">
+      <div className="absolute -top-3 left-4 bg-paper px-2 eyebrow text-saffron">
+        ⌃ FRESH TICKET · SHARE NOW
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-5 items-start mt-2">
         {qr && (
-          <img
-            src={qr}
-            alt="QR code"
-            className="rounded-md shrink-0 hidden sm:block"
-            width={140}
-            height={140}
-          />
+          <div className="shrink-0 mx-auto sm:mx-0">
+            <img src={qr} alt="QR code" className="w-[140px] h-[140px]" width={140} height={140} />
+            <div className="eyebrow text-center mt-1">SCAN ME</div>
+          </div>
         )}
-        <div className="flex-1 min-w-0">
-          <h2 className="font-medium">Share with the group</h2>
-          <p className="text-xs text-muted mt-1">
-            Drop this in <code className="font-mono">#secure-lunch-internal</code> so everyone
-            knows.
-          </p>
-
-          <div className="mt-4 space-y-2">
-            <pre className="rounded-lg bg-bg/60 border border-border p-3 text-xs whitespace-pre-wrap font-mono overflow-x-auto">
-              {slackText}
-            </pre>
-
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => copy(slackText, "slack")}>
-                {copied === "slack" ? "Copied!" : "Copy Slack message"}
+        <div className="flex-1 min-w-0 w-full">
+          <pre className="text-[11px] leading-[1.7] whitespace-pre-wrap font-mono border-l-2 border-ink-faint/40 pl-3 py-1 max-h-[140px] overflow-auto">
+            {slackText}
+          </pre>
+          <div className="flex flex-wrap gap-2 mt-4">
+            <Button size="sm" onClick={() => copy(slackText, "slack")}>
+              {copied === "slack" ? "✓ Copied" : "Copy Slack message"}
+            </Button>
+            <Button size="sm" variant="outline" onClick={whatsappAny}>
+              WhatsApp it
+            </Button>
+            <Button size="sm" variant="ghost" onClick={() => copy(ticketUrl, "url")}>
+              {copied === "url" ? "✓ Copied" : "Just the link"}
+            </Button>
+            {hasShare && (
+              <Button size="sm" variant="ghost" onClick={nativeShare}>
+                Share…
               </Button>
-              <Button size="sm" variant="outline" onClick={whatsappAny}>
-                Share via WhatsApp
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => copy(ticketUrl, "url")}>
-                {copied === "url" ? "Copied!" : "Copy link only"}
-              </Button>
-              {hasShare && (
-                <Button size="sm" variant="outline" onClick={nativeShare}>
-                  Share…
-                </Button>
-              )}
-            </div>
+            )}
           </div>
         </div>
       </div>
-    </Card>
+    </section>
   );
 }

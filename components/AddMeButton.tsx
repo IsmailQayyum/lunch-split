@@ -23,9 +23,9 @@ export function AddMeButton({ slug, suggestedAmount, currency }: Props) {
 
   function submit() {
     setErr(null);
-    if (!name.trim()) return setErr("Name required");
+    if (!name.trim()) return setErr("Need a name.");
     const amt = Number(amount);
-    if (!amt || amt < 0) return setErr("Enter a valid amount");
+    if (!amt || amt < 0) return setErr("Enter a valid amount.");
     startTransition(async () => {
       try {
         await addParticipantAction(
@@ -47,51 +47,47 @@ export function AddMeButton({ slug, suggestedAmount, currency }: Props) {
 
   if (!open) {
     return (
-      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
-        + Add me (joined late)
-      </Button>
+      <div className="text-center">
+        <button onClick={() => setOpen(true)} className="btn btn-outline btn-sm">
+          + Add me (joined late)
+        </button>
+      </div>
     );
   }
 
   return (
-    <div className="rounded-xl border border-border bg-bg/50 p-4 space-y-3">
-      <div className="text-sm font-medium">Add yourself to this ticket</div>
-      <div className="grid grid-cols-2 gap-3">
-        <FieldX label="Name *" value={name} onChange={setName} placeholder="Your name" />
-        <FieldX
-          label="WhatsApp"
-          value={whatsapp}
-          onChange={setWhatsapp}
-          placeholder="03xx-xxxxxxx"
-        />
+    <div className="border-2 border-dashed border-ink-faint/60 p-5 space-y-4 animate-fade-up">
+      <div className="flex items-center justify-between">
+        <div className="eyebrow text-saffron">+ JOINING LATE</div>
+        <button
+          type="button"
+          className="eyebrow ink-link"
+          onClick={() => setOpen(false)}
+          disabled={pending}
+        >
+          CANCEL
+        </button>
       </div>
-      <FieldX
-        label="Email (optional)"
-        value={email}
-        onChange={setEmail}
-        placeholder="you@example.com"
-        type="email"
-      />
-      <FieldX
-        label={`Your share (suggested: ${currency} ${suggestedAmount})`}
+      <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+        <Field label="NAME *" value={name} onChange={setName} placeholder="Your name" />
+        <Field label="WHATSAPP" value={whatsapp} onChange={setWhatsapp} placeholder="03xx-xxxxxxx" />
+      </div>
+      <Field label="EMAIL" value={email} onChange={setEmail} placeholder="you@example.com" type="email" />
+      <Field
+        label={`YOUR SHARE · suggested ${currency} ${suggestedAmount.toLocaleString("en-PK")}`}
         value={amount}
         onChange={setAmount}
         type="number"
       />
-      {err && <div className="text-xs text-red-600">{err}</div>}
-      <div className="flex gap-2">
-        <Button size="sm" onClick={submit} disabled={pending}>
-          {pending ? "Adding…" : "Add me"}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={() => setOpen(false)} disabled={pending}>
-          Cancel
-        </Button>
-      </div>
+      {err && <div className="text-[11px] text-saffron italic">{err}</div>}
+      <Button onClick={submit} disabled={pending}>
+        {pending ? "Adding…" : "Add me to the ticket"}
+      </Button>
     </div>
   );
 }
 
-function FieldX({
+function Field({
   label,
   value,
   onChange,
@@ -105,14 +101,9 @@ function FieldX({
   type?: string;
 }) {
   return (
-    <div className="space-y-1">
-      <Label className="text-xs">{label}</Label>
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        type={type}
-      />
+    <div className="space-y-2">
+      <Label>{label}</Label>
+      <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} type={type} />
     </div>
   );
 }

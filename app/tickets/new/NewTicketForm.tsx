@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createTicketAction } from "@/lib/actions/tickets";
@@ -41,9 +40,7 @@ export function NewTicketForm() {
   const [total, setTotal] = useState("");
   const [notes, setNotes] = useState("");
   const [splitMode, setSplitMode] = useState<"even" | "custom">("even");
-  const [rows, setRows] = useState<Row[]>([
-    { name: "", email: "", whatsapp: "", amount: "" },
-  ]);
+  const [rows, setRows] = useState<Row[]>([{ name: "", email: "", whatsapp: "", amount: "" }]);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -53,7 +50,7 @@ export function NewTicketForm() {
       if (raw) {
         const saved = JSON.parse(raw);
         setPayer({ ...emptyProfile, ...saved });
-        if (saved.name) setShowPayer(false); // collapse if already saved
+        if (saved.name) setShowPayer(false);
       }
     } catch {}
   }, []);
@@ -80,18 +77,13 @@ export function NewTicketForm() {
   function submit() {
     setError(null);
     if (!payer.name.trim()) {
-      setError("Add your name (you're the payer)");
+      setError("You haven't told us your name. (You're the payer.)");
       setShowPayer(true);
       return;
     }
-    if (!title.trim()) {
-      setError("Add a title");
-      return;
-    }
-    if (!totalNum) {
-      setError("Add the bill total");
-      return;
-    }
+    if (!title.trim()) return setError("What did you eat? Give it a title.");
+    if (!totalNum) return setError("Bill total needs a number.");
+
     const participants = rows
       .map((r) => ({
         name: r.name.trim(),
@@ -101,12 +93,8 @@ export function NewTicketForm() {
       }))
       .filter((r) => r.name);
 
-    if (participants.length === 0) {
-      setError("Add at least one other person");
-      return;
-    }
+    if (participants.length === 0) return setError("Add at least one other person.");
 
-    // Persist payer profile for next time
     try {
       localStorage.setItem(PROFILE_KEY, JSON.stringify(payer));
     } catch {}
@@ -128,125 +116,87 @@ export function NewTicketForm() {
   }
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <div
-          className="flex items-center justify-between cursor-pointer"
-          onClick={() => setShowPayer((v) => !v)}
-        >
-          <div>
-            <h2 className="font-medium">Your details</h2>
-            <p className="text-xs text-muted">
-              {payer.name
-                ? `Saved: ${payer.name}${payer.whatsapp ? " · " + payer.whatsapp : ""}`
-                : "Tap to fill — saved on this device"}
-            </p>
-          </div>
-          <span className="text-muted">{showPayer ? "−" : "+"}</span>
+    <div className="space-y-10 stagger">
+      {/* PAYER SECTION */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <div className="eyebrow text-saffron">§ 01 · YOU (THE PAYER)</div>
+          <button
+            type="button"
+            onClick={() => setShowPayer((v) => !v)}
+            className="eyebrow ink-link cursor-pointer"
+          >
+            {showPayer ? "COLLAPSE" : "EDIT"}
+          </button>
         </div>
-        {showPayer && (
-          <div className="mt-5 space-y-4">
-            <div className="grid grid-cols-2 gap-3">
-              <Field
-                label="Your name *"
-                value={payer.name}
-                onChange={(v) => updatePayer({ name: v })}
-                placeholder="Ismail Qayyum"
-              />
-              <Field
-                label="WhatsApp"
-                value={payer.whatsapp}
-                onChange={(v) => updatePayer({ whatsapp: v })}
-                placeholder="03xx-xxxxxxx"
-              />
+        {!showPayer ? (
+          <div className="text-sm">
+            <span className="display-italic text-[22px]">{payer.name || "—"}</span>
+            <span className="text-ink-faint ml-2 text-[11px]">
+              {payer.whatsapp || payer.email || "no contact saved"}
+            </span>
+            <span className="text-ink-faint ml-2 text-[11px]">· saved on this device</span>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+              <Pair label="YOUR NAME *" value={payer.name} onChange={(v) => updatePayer({ name: v })} placeholder="Ismail Qayyum" />
+              <Pair label="WHATSAPP" value={payer.whatsapp} onChange={(v) => updatePayer({ whatsapp: v })} placeholder="03xx-xxxxxxx" />
             </div>
-            <Field
-              label="Email (for receiving reminders if someone marks paid)"
-              value={payer.email}
-              onChange={(v) => updatePayer({ email: v })}
-              placeholder="you@example.com"
-              type="email"
-            />
-            <div className="border-t border-border pt-4">
-              <div className="text-xs uppercase tracking-wider text-muted mb-3">
-                Payment methods (shown to your colleagues so they know where to send)
+            <Pair label="EMAIL" value={payer.email} onChange={(v) => updatePayer({ email: v })} placeholder="you@example.com" type="email" />
+
+            <div className="pt-2">
+              <div className="eyebrow mb-3">PAYMENT METHODS</div>
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                <Pair label="JAZZCASH" value={payer.jazzcash} onChange={(v) => updatePayer({ jazzcash: v })} placeholder="03xx-xxxxxxx" />
+                <Pair label="EASYPAISA" value={payer.easypaisa} onChange={(v) => updatePayer({ easypaisa: v })} placeholder="03xx-xxxxxxx" />
               </div>
-              <div className="space-y-3">
-                <div className="grid grid-cols-2 gap-3">
-                  <Field
-                    label="JazzCash"
-                    value={payer.jazzcash}
-                    onChange={(v) => updatePayer({ jazzcash: v })}
-                    placeholder="03xx-xxxxxxx"
-                  />
-                  <Field
-                    label="EasyPaisa"
-                    value={payer.easypaisa}
-                    onChange={(v) => updatePayer({ easypaisa: v })}
-                    placeholder="03xx-xxxxxxx"
-                  />
-                </div>
-                <Field
-                  label="Bank IBAN / account number"
-                  value={payer.iban}
-                  onChange={(v) => updatePayer({ iban: v })}
-                  placeholder="PKxx XXXX XXXX XXXX XXXX XXXX"
-                />
-                <Field
-                  label="Account title"
-                  value={payer.accountTitle}
-                  onChange={(v) => updatePayer({ accountTitle: v })}
-                  placeholder="Name on bank account"
-                />
-                <label className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={payer.acceptsCash}
-                    onChange={(e) => updatePayer({ acceptsCash: e.target.checked })}
-                    className="h-4 w-4 rounded border-border"
-                  />
-                  Cash on the spot is fine
-                </label>
+              <div className="mt-4">
+                <Pair label="IBAN / BANK ACCOUNT" value={payer.iban} onChange={(v) => updatePayer({ iban: v })} placeholder="PKxx XXXX XXXX XXXX XXXX XXXX" />
               </div>
+              <div className="mt-4">
+                <Pair label="ACCOUNT TITLE" value={payer.accountTitle} onChange={(v) => updatePayer({ accountTitle: v })} placeholder="Name on bank account" />
+              </div>
+              <label className="flex items-center gap-2 mt-4 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={payer.acceptsCash}
+                  onChange={(e) => updatePayer({ acceptsCash: e.target.checked })}
+                  className="h-4 w-4 accent-[color:var(--saffron)] border-ink"
+                />
+                <span className="text-[12px]">Cash on the spot is fine.</span>
+              </label>
             </div>
           </div>
         )}
-      </Card>
+      </section>
 
-      <Card>
-        <h2 className="font-medium mb-4">The lunch</h2>
-        <div className="space-y-4">
-          <Field
-            label="What did you eat? *"
-            value={title}
-            onChange={setTitle}
-            placeholder="KFC lunch — Friday"
-          />
-          <Field
-            label="Total bill (PKR) *"
-            value={total}
-            onChange={setTotal}
-            placeholder="3500"
-            type="number"
-          />
-          <Field
-            label="Notes"
-            value={notes}
-            onChange={setNotes}
-            placeholder="Delivery via Foodpanda; tip included"
-          />
+      <div className="divider-dots" />
+
+      {/* THE LUNCH */}
+      <section>
+        <div className="eyebrow mb-4 text-saffron">§ 02 · THE LUNCH</div>
+        <div className="space-y-6">
+          <Pair label="WHAT'D YOU EAT? *" value={title} onChange={setTitle} placeholder="Karahi Friday at Bundu Khan" />
+          <Pair label="TOTAL (PKR) *" value={total} onChange={setTotal} placeholder="3500" type="number" />
+          <Pair label="NOTES (OPTIONAL)" value={notes} onChange={setNotes} placeholder="Tip included; Foodpanda delivery" />
         </div>
-      </Card>
+      </section>
 
-      <Card>
+      <div className="divider-dots" />
+
+      {/* PARTICIPANTS */}
+      <section>
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-medium">Who joined (not including you)</h2>
-          <div className="inline-flex rounded-lg border border-border p-1 text-sm">
+          <div className="eyebrow text-saffron">§ 03 · WHO JOINED</div>
+          <div className="inline-flex border-[1.5px] border-ink text-[10px] font-mono">
             <button
               type="button"
               onClick={() => setSplitMode("even")}
-              className={`px-3 py-1 rounded-md ${
-                splitMode === "even" ? "bg-fg text-bg" : ""
+              className={`px-3 py-1 uppercase tracking-wide transition ${
+                splitMode === "even"
+                  ? "bg-ink text-paper-light"
+                  : "hover:bg-paper-deep"
               }`}
             >
               Even
@@ -254,8 +204,10 @@ export function NewTicketForm() {
             <button
               type="button"
               onClick={() => setSplitMode("custom")}
-              className={`px-3 py-1 rounded-md ${
-                splitMode === "custom" ? "bg-fg text-bg" : ""
+              className={`px-3 py-1 uppercase tracking-wide transition border-l-[1.5px] border-ink ${
+                splitMode === "custom"
+                  ? "bg-ink text-paper-light"
+                  : "hover:bg-paper-deep"
               }`}
             >
               Custom
@@ -264,81 +216,84 @@ export function NewTicketForm() {
         </div>
 
         {splitMode === "even" && totalNum > 0 && (
-          <p className="text-xs text-muted mb-3">
-            Each person: ~Rs. {Math.floor(totalNum / Math.max(rows.length, 1))}
-          </p>
+          <div className="text-[11px] text-ink-faint mb-4 italic">
+            Each person: ~ ₨ {Math.floor(totalNum / Math.max(rows.length, 1)).toLocaleString("en-PK")}
+            <span className="ml-1 text-ink-soft">(you take the rounding remainder)</span>
+          </div>
         )}
 
-        <div className="space-y-3">
+        <div className="space-y-5">
           {rows.map((r, i) => (
-            <div key={i} className="grid grid-cols-12 gap-2 items-center">
-              <Input
-                className="col-span-4"
-                placeholder="Name"
-                value={r.name}
-                onChange={(e) => updateRow(i, { name: e.target.value })}
-              />
-              <Input
-                className="col-span-3"
-                placeholder="WhatsApp"
-                value={r.whatsapp}
-                onChange={(e) => updateRow(i, { whatsapp: e.target.value })}
-              />
-              <Input
-                className="col-span-3"
-                placeholder="Email (optional)"
-                type="email"
-                value={r.email}
-                onChange={(e) => updateRow(i, { email: e.target.value })}
-              />
-              {splitMode === "custom" ? (
-                <Input
-                  className="col-span-2"
-                  type="number"
-                  placeholder="Rs."
-                  value={r.amount}
-                  onChange={(e) => updateRow(i, { amount: e.target.value })}
-                />
-              ) : (
-                <div className="col-span-2 text-right text-sm text-muted pr-2">
-                  {evenShares ? `Rs. ${evenShares[i]}` : "—"}
+            <div key={i} className="space-y-3 animate-fade-up">
+              <div className="flex items-baseline justify-between">
+                <div className="eyebrow">ENTRY {String(i + 1).padStart(2, "0")}</div>
+                {rows.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => removeRow(i)}
+                    className="eyebrow text-saffron ink-link"
+                  >
+                    REMOVE
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-12 gap-x-4 gap-y-3">
+                <div className="col-span-12 sm:col-span-5">
+                  <Input placeholder="Name" value={r.name} onChange={(e) => updateRow(i, { name: e.target.value })} />
                 </div>
-              )}
-              <button
-                type="button"
-                onClick={() => removeRow(i)}
-                className="col-span-12 text-xs text-muted hover:text-red-600 -mt-2 text-right pr-1"
-              >
-                remove
-              </button>
+                <div className="col-span-6 sm:col-span-4">
+                  <Input placeholder="WhatsApp" value={r.whatsapp} onChange={(e) => updateRow(i, { whatsapp: e.target.value })} />
+                </div>
+                <div className="col-span-6 sm:col-span-3 num">
+                  {splitMode === "custom" ? (
+                    <Input
+                      placeholder="₨ amount"
+                      type="number"
+                      value={r.amount}
+                      onChange={(e) => updateRow(i, { amount: e.target.value })}
+                    />
+                  ) : (
+                    <div className="border-b-[1.5px] border-ink-faint pb-2 text-right text-[14px] num">
+                      ₨ {(evenShares ? evenShares[i] : 0).toLocaleString("en-PK")}
+                    </div>
+                  )}
+                </div>
+                <div className="col-span-12">
+                  <Input placeholder="Email (optional, for reminders)" type="email" value={r.email} onChange={(e) => updateRow(i, { email: e.target.value })} />
+                </div>
+              </div>
             </div>
           ))}
         </div>
+
         <button
           type="button"
           onClick={addRow}
-          className="mt-4 text-sm font-medium text-fg/80 hover:text-fg"
+          className="mt-6 eyebrow ink-link"
         >
-          + Add another
+          + ADD ANOTHER LINE
         </button>
-      </Card>
+      </section>
+
+      <div className="divider-double" />
 
       {error && (
-        <div className="text-sm text-red-600 bg-red-50/50 border border-red-200/50 rounded-lg px-3 py-2">
+        <div className="text-[12px] text-saffron border-l-2 border-saffron pl-3 italic">
           {error}
         </div>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-col items-center gap-4 pt-2">
         <Button onClick={submit} disabled={pending} size="lg">
-          {pending ? "Creating…" : "Create ticket"}
+          {pending ? "Printing…" : "↓ Print this ticket"}
         </Button>
+        <div className="eyebrow text-ink-faint">NO CONFIRMATIONS · INSTANT</div>
       </div>
     </div>
   );
 }
 
-function Field({
+function Pair({
   label,
   value,
   onChange,
@@ -352,14 +307,9 @@ function Field({
   type?: string;
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <Label>{label}</Label>
-      <Input
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        placeholder={placeholder}
-        type={type}
-      />
+      <Input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} type={type} />
     </div>
   );
 }

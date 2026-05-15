@@ -3,16 +3,18 @@ import { NewTicketForm } from "./NewTicketForm";
 
 export default function NewTicketPage() {
   return (
-    <main className="max-w-2xl mx-auto px-6 py-10">
-      <header className="mb-6">
-        <Link href="/" className="text-sm text-muted hover:underline">
-          ← Back
-        </Link>
-        <h1 className="text-2xl font-semibold tracking-tight mt-2">New lunch ticket</h1>
-        <p className="text-sm text-muted mt-1">
-          Fill in your details (saved on this device for next time), then who joined and how much.
+    <main className="max-w-[560px] mx-auto px-5 pt-8 pb-16 animate-print">
+      <Link href="/" className="eyebrow ink-link">
+        ← BACK TO COUNTER
+      </Link>
+      <header className="text-center mt-8 mb-6">
+        <div className="eyebrow">NEW ORDER · DRAFT</div>
+        <h1 className="display-italic text-[56px] mt-3 leading-[0.9]">Punch a ticket.</h1>
+        <p className="text-ink-soft text-[13px] mt-3 max-w-[360px] mx-auto">
+          Fill it once, share once — the rest settle up on their own.
         </p>
       </header>
+      <div className="divider-dots mb-8" />
       <NewTicketForm />
     </main>
   );

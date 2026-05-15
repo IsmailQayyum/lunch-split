@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { Button } from "./ui/button";
-import { formatMoney, relativeTime } from "@/lib/utils";
 import { normalizeWhatsapp, whatsappUrl, reminderText } from "@/lib/whatsapp";
 import {
   markPaidAction,
@@ -31,6 +30,15 @@ type Props = {
   currency: string;
   lastRemindedAt: Date | null;
 };
+
+function relTime(d: Date | null) {
+  if (!d) return "";
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if (diff < 60) return "just now";
+  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
+  return `${Math.floor(diff / 86400)}d`;
+}
 
 export function ParticipantRow({
   slug,
@@ -73,126 +81,130 @@ export function ParticipantRow({
       }),
     );
     window.open(url, "_blank", "noopener,noreferrer");
-    // Log async, no await
     void logWhatsappReminderAction(slug, participant.id);
   }
 
+  const recentlyReminded =
+    lastRemindedAt && Date.now() - lastRemindedAt.getTime() < 60 * 60 * 1000;
+
   return (
-    <div
-      className={`rounded-xl border border-border p-3 flex items-center justify-between gap-3 ${
-        settled ? "opacity-60" : ""
-      }`}
-    >
-      <div className="min-w-0 flex-1">
-        <div className="font-medium truncate">{participant.name}</div>
-        <div className="text-xs text-muted mt-0.5 truncate">
-          {[participant.whatsapp, participant.email].filter(Boolean).join(" · ") || "no contact"}{" "}
-          ·{" "}
-          <span
-            className={
-              participant.status === "confirmed" || participant.status === "cash"
-                ? "text-emerald-600"
-                : participant.status === "self_marked"
-                  ? "text-amber-600"
-                  : "text-red-600"
-            }
-          >
-            {label(participant.status)}
-          </span>
+    <div className="group">
+      {/* Top line: dot-leader between name and amount */}
+      <div className={`line-item ${settled ? "opacity-60" : ""}`}>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="display-italic text-[19px] truncate">{participant.name}</span>
+          {participant.status === "confirmed" && (
+            <span className="stamp text-moss animate-stamp">✓ Paid</span>
+          )}
+          {participant.status === "cash" && (
+            <span className="stamp text-moss animate-stamp">Cash</span>
+          )}
+          {participant.status === "self_marked" && (
+            <span className="stamp text-saffron">Awaiting</span>
+          )}
         </div>
-        {err && <div className="text-xs text-red-600 mt-1">{err}</div>}
+        <span className="leader" />
+        <span className="display text-[22px] num shrink-0">
+          ₨ {participant.amountOwed.toLocaleString("en-PK")}
+        </span>
       </div>
 
-      <div className="flex items-center gap-2 shrink-0">
-        <div className="font-semibold text-sm">
-          {formatMoney(participant.amountOwed, currency)}
-        </div>
+      {/* Sub-line: contact info */}
+      <div className="text-[11px] text-ink-faint flex items-center gap-2 mt-0.5 ml-0.5">
+        <span>
+          {[participant.whatsapp, participant.email].filter(Boolean).join(" · ") || "no contact"}
+        </span>
+        {participant.status === "pending" && <span className="text-saffron">· pending</span>}
+      </div>
 
-        {!settled && ticketOpen && (
-          <>
-            <Button
-              size="sm"
-              onClick={() => run(() => markPaidAction(slug, participant.id))}
-              disabled={pending || participant.status === "self_marked"}
-              title="Mark this person as paid (anyone can do this)"
-            >
-              {participant.status === "self_marked" ? "Awaiting confirm" : "I paid"}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => run(() => confirmPaidAction(slug, participant.id))}
-              disabled={pending}
-              title="Payer: confirm receipt"
-            >
-              Confirm
-            </Button>
-            <div className="relative">
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => setMenuOpen((v) => !v)}
-                aria-label="More"
-              >
-                ⋯
-              </Button>
-              {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 w-52 rounded-lg border border-border bg-bg shadow-lg z-10 text-sm">
-                  <MenuItem
-                    disabled={!waNumber}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      openWhatsapp();
-                    }}
-                  >
-                    {waNumber ? "Nudge on WhatsApp" : "No WhatsApp on file"}
-                  </MenuItem>
-                  <MenuItem
-                    disabled={!participant.email}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      run(() => remindEmailAction(slug, participant.id));
-                    }}
-                  >
-                    {participant.email ? "Send reminder email" : "No email on file"}
-                  </MenuItem>
-                  <MenuItem
-                    onClick={() => {
-                      setMenuOpen(false);
-                      run(() => markCashAction(slug, participant.id));
-                    }}
-                  >
-                    Mark cash paid
-                  </MenuItem>
-                  <MenuItem
-                    onClick={() => {
-                      setMenuOpen(false);
-                      run(() => removeParticipantAction(slug, participant.id));
-                    }}
-                  >
-                    Remove
-                  </MenuItem>
-                  {lastRemindedAt && (
-                    <div className="px-3 py-2 text-xs text-muted border-t border-border">
-                      Last nudged {relativeTime(lastRemindedAt)}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          </>
-        )}
+      {err && <div className="text-[11px] text-saffron mt-1">{err}</div>}
 
-        {settled && ticketOpen && (
+      {/* Actions */}
+      {!settled && ticketOpen && (
+        <div className="flex flex-wrap items-center gap-2 mt-3 pl-0.5">
           <Button
             size="sm"
-            variant="ghost"
+            onClick={() => run(() => markPaidAction(slug, participant.id))}
+            disabled={pending || participant.status === "self_marked"}
+          >
+            {participant.status === "self_marked" ? "Sent" : "I paid"}
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => run(() => confirmPaidAction(slug, participant.id))}
+            disabled={pending}
+          >
+            Confirm
+          </Button>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              className="btn btn-ghost btn-sm"
+              aria-label="More"
+            >
+              ⋯
+            </button>
+            {menuOpen && (
+              <div className="absolute right-0 top-full mt-1 w-56 bg-paper-light border border-ink z-10 text-[11px] uppercase tracking-wider shadow-lg">
+                <MenuItem
+                  disabled={!waNumber}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    openWhatsapp();
+                  }}
+                >
+                  {waNumber ? "Nudge on WhatsApp" : "No WhatsApp on file"}
+                </MenuItem>
+                <MenuItem
+                  disabled={!participant.email}
+                  onClick={() => {
+                    setMenuOpen(false);
+                    run(() => remindEmailAction(slug, participant.id));
+                  }}
+                >
+                  {participant.email ? "Email reminder" : "No email on file"}
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false);
+                    run(() => markCashAction(slug, participant.id));
+                  }}
+                >
+                  Paid in cash
+                </MenuItem>
+                <MenuItem
+                  onClick={() => {
+                    setMenuOpen(false);
+                    run(() => removeParticipantAction(slug, participant.id));
+                  }}
+                >
+                  Remove entry
+                </MenuItem>
+                {lastRemindedAt && (
+                  <div className="px-3 py-2 text-[10px] text-ink-faint normal-case tracking-normal border-t border-ink-faint/30">
+                    last nudged {relTime(lastRemindedAt)}{recentlyReminded ? " (recent)" : ""}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {settled && ticketOpen && (
+        <div className="mt-2">
+          <button
+            type="button"
+            className="eyebrow ink-link"
             onClick={() => run(() => reopenParticipantAction(slug, participant.id))}
           >
             Reopen
-          </Button>
-        )}
-      </div>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -211,24 +223,9 @@ function MenuItem({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="block w-full text-left px-3 py-2 hover:bg-border/30 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="block w-full text-left px-3 py-2 hover:bg-paper-deep disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
     >
       {children}
     </button>
   );
-}
-
-function label(s: string) {
-  switch (s) {
-    case "pending":
-      return "Pending";
-    case "self_marked":
-      return "Marked paid, awaiting confirm";
-    case "confirmed":
-      return "Confirmed";
-    case "cash":
-      return "Paid in cash";
-    default:
-      return s;
-  }
 }

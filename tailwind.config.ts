@@ -5,14 +5,23 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-sans)", "system-ui", "sans-serif"],
+        display: ["var(--font-display)", "Fraunces", "serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       colors: {
-        bg: "rgb(var(--bg) / <alpha-value>)",
-        fg: "rgb(var(--fg) / <alpha-value>)",
-        muted: "rgb(var(--muted) / <alpha-value>)",
-        border: "rgb(var(--border) / <alpha-value>)",
-        accent: "rgb(var(--accent) / <alpha-value>)",
+        paper: "var(--paper)",
+        "paper-light": "var(--paper-light)",
+        "paper-deep": "var(--paper-deep)",
+        ink: "var(--ink)",
+        "ink-soft": "var(--ink-soft)",
+        "ink-faint": "var(--ink-faint)",
+        saffron: "var(--saffron)",
+        moss: "var(--moss)",
+        rust: "var(--rust)",
+      },
+      letterSpacing: {
+        wide2: "0.2em",
+        wide3: "0.3em",
       },
     },
   },
