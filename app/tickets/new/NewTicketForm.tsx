@@ -104,8 +104,8 @@ export function NewTicketForm({
             name: payer.name,
             email: payer.email ?? undefined,
             whatsapp: payer.whatsapp ?? undefined,
-            jazzcash: payer.jazzcash ?? undefined,
-            easypaisa: payer.easypaisa ?? undefined,
+            walletNumber: payer.walletNumber ?? undefined,
+            walletApps: payer.walletApps ?? [],
             iban: payer.iban ?? undefined,
             accountTitle: payer.accountTitle ?? undefined,
             acceptsCash: payer.acceptsCash,
@@ -119,7 +119,7 @@ export function NewTicketForm({
     });
   }
 
-  const payerHasMethod = payer && (payer.jazzcash || payer.easypaisa || payer.iban || payer.acceptsCash);
+  const payerHasMethod = payer && (payer.walletNumber || payer.iban || payer.acceptsCash);
 
   return (
     <div className="space-y-10 stagger">
@@ -166,8 +166,7 @@ export function NewTicketForm({
               <div className="mt-4 text-[12px] text-ink-soft">
                 Payment via{" "}
                 {[
-                  payer.jazzcash && "JazzCash",
-                  payer.easypaisa && "EasyPaisa",
+                  payer.walletNumber && `Wallet (${payer.walletApps.length} apps)`,
                   payer.iban && "Bank",
                   payer.acceptsCash && "Cash",
                 ]

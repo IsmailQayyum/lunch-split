@@ -1,10 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { customAlphabet } from "nanoid";
 import { z } from "zod";
 
-import { getRoster, putRoster, type Person } from "@/lib/store-roster";
+import { getRoster, putRoster, WALLET_APPS, type Person, type WalletApp } from "@/lib/store-roster";
 
 const newId = customAlphabet(
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
@@ -19,13 +18,15 @@ const optStr = (max: number) =>
     .or(z.literal(""))
     .transform((v) => v || undefined);
 
+const walletAppEnum = z.enum(["jazzcash", "easypaisa", "nayapay", "sadapay"]);
+
 const personSchema = z.object({
   id: z.string().optional(),
   name: z.string().min(1).max(80),
   email: z.string().email().optional().or(z.literal("")).transform((v) => v || undefined),
   whatsapp: optStr(40),
-  jazzcash: optStr(40),
-  easypaisa: optStr(40),
+  walletNumber: optStr(40),
+  walletApps: z.array(walletAppEnum).optional().default([]),
   iban: optStr(40),
   accountTitle: optStr(80),
   acceptsCash: z.boolean().default(true),
@@ -38,13 +39,17 @@ export async function listPeopleAction(): Promise<Person[]> {
 export async function upsertPersonAction(input: unknown): Promise<Person> {
   const data = personSchema.parse(input);
   const roster = await getRoster();
+  // Dedupe + filter walletApps to known values
+  const walletApps = Array.from(new Set(data.walletApps)).filter((a): a is WalletApp =>
+    WALLET_APPS.some((w) => w.id === a),
+  );
   const next: Person = {
     id: data.id ?? newId(),
     name: data.name,
     email: data.email ?? null,
     whatsapp: data.whatsapp ?? null,
-    jazzcash: data.jazzcash ?? null,
-    easypaisa: data.easypaisa ?? null,
+    walletNumber: data.walletNumber ?? null,
+    walletApps: data.walletNumber ? walletApps : [],
     iban: data.iban ?? null,
     accountTitle: data.accountTitle ?? null,
     acceptsCash: data.acceptsCash,
@@ -57,9 +62,6 @@ export async function upsertPersonAction(input: unknown): Promise<Person> {
     roster.push(next);
   }
   await putRoster(roster);
-  // Skip revalidatePath — the client manages its own state and the next
-  // navigation will pick up changes. Avoids a redundant server re-render
-  // (which used to trigger a stale blob read and the "vanishing person" bug).
   return next;
 }
 

@@ -1,3 +1,5 @@
+import type { WalletApp } from "./store-roster";
+
 export type ParticipantStatus = "pending" | "self_marked" | "confirmed" | "cash";
 export type TicketStatus = "open" | "closed";
 
@@ -22,8 +24,8 @@ export type PayerProfile = {
   name: string;
   email: string | null;
   whatsapp: string | null;
-  jazzcash: string | null;
-  easypaisa: string | null;
+  walletNumber: string | null;
+  walletApps: WalletApp[];
   iban: string | null;
   accountTitle: string | null;
   acceptsCash: boolean;

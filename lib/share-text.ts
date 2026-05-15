@@ -8,9 +8,11 @@ export function slackShareText(t: Ticket, ticketUrl: string): string {
     .map((p) => `• *${p.name}* — Rs. ${p.amountOwed.toLocaleString("en-PK")}`)
     .join("\n");
   if (splits) lines.push(splits);
-  if (t.payer.jazzcash) lines.push(`💸 JazzCash: \`${t.payer.jazzcash}\``);
-  if (t.payer.easypaisa) lines.push(`💸 EasyPaisa: \`${t.payer.easypaisa}\``);
-  if (t.payer.iban) lines.push(`🏦 IBAN: \`${t.payer.iban}\``);
+  if (t.payer.walletNumber) {
+    const apps = t.payer.walletApps.length > 0 ? ` (${t.payer.walletApps.join(", ")})` : "";
+    lines.push(`💸 Wallet: \`${t.payer.walletNumber}\`${apps}`);
+  }
+  if (t.payer.iban) lines.push(`🏦 Bank: \`${t.payer.iban}\``);
   lines.push("");
   lines.push(`Mark yourself paid: ${ticketUrl}`);
   return lines.join("\n");

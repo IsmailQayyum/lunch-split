@@ -22,6 +22,8 @@ const participantInputSchema = z.object({
   amount: z.number().nonnegative().optional(),
 });
 
+const walletAppEnum = z.enum(["jazzcash", "easypaisa", "nayapay", "sadapay"]);
+
 const createTicketSchema = z.object({
   title: z.string().min(1).max(120),
   totalAmount: z.number().positive(),
@@ -30,8 +32,8 @@ const createTicketSchema = z.object({
     name: z.string().min(1).max(80),
     email: z.string().email().optional().or(z.literal("")).transform((v) => v || undefined),
     whatsapp: opt,
-    jazzcash: opt,
-    easypaisa: opt,
+    walletNumber: opt,
+    walletApps: z.array(walletAppEnum).optional().default([]),
     iban: opt,
     accountTitle: opt,
     acceptsCash: z.boolean().default(true),
@@ -62,8 +64,8 @@ export async function createTicketAction(input: unknown) {
       name: data.payer.name,
       email: data.payer.email ?? null,
       whatsapp: data.payer.whatsapp ?? null,
-      jazzcash: data.payer.jazzcash ?? null,
-      easypaisa: data.payer.easypaisa ?? null,
+      walletNumber: data.payer.walletNumber ?? null,
+      walletApps: data.payer.walletNumber ? data.payer.walletApps : [],
       iban: data.payer.iban ?? null,
       accountTitle: data.payer.accountTitle ?? null,
       acceptsCash: data.payer.acceptsCash,

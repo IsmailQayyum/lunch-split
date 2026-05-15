@@ -200,8 +200,8 @@ export default async function TicketPage({
       <PaymentMethodsPanel
         payer={{
           name: ticket.payer.name,
-          jazzcash: ticket.payer.jazzcash,
-          easypaisa: ticket.payer.easypaisa,
+          walletNumber: ticket.payer.walletNumber,
+          walletApps: ticket.payer.walletApps ?? [],
           iban: ticket.payer.iban,
           accountTitle: ticket.payer.accountTitle,
           acceptsCash: ticket.payer.acceptsCash,
