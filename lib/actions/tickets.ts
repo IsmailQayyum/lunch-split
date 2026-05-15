@@ -85,7 +85,7 @@ export async function createTicketAction(input: unknown) {
   };
 
   await putTicket(ticket);
-  redirect(`/t/${slug}`);
+  redirect(`/t/${slug}?created=1`);
 }
 
 function findParticipant(t: Ticket, id: string): Participant {
