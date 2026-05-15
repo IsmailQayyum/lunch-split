@@ -12,12 +12,20 @@ import type { Person } from "@/lib/store-roster";
 
 const ME_KEY = "lunch-split:me-id";
 
-export function NewTicketForm({ roster: initialRoster }: { roster: Person[] }) {
+export function NewTicketForm({
+  roster: initialRoster,
+  initialTitle = "",
+  initialTotal = "",
+}: {
+  roster: Person[];
+  initialTitle?: string;
+  initialTotal?: string;
+}) {
   const [roster, setRoster] = useState(initialRoster);
   const [payerId, setPayerId] = useState<string | null>(null);
 
-  const [title, setTitle] = useState("");
-  const [total, setTotal] = useState("");
+  const [title, setTitle] = useState(initialTitle);
+  const [total, setTotal] = useState(initialTotal);
   const [notes, setNotes] = useState("");
   const [splitMode, setSplitMode] = useState<"even" | "custom">("even");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
