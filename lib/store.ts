@@ -1,5 +1,6 @@
 import { put, list } from "@vercel/blob";
 import type { Ticket } from "./types";
+import { upsertIndexEntry, toIndexEntry } from "./tickets-index";
 
 const PREFIX = "tickets/";
 
@@ -27,6 +28,12 @@ export async function putTicket(ticket: Ticket): Promise<void> {
     addRandomSuffix: false,
     cacheControlMaxAge: 0,
   });
+  // Best-effort index update — don't fail the save if this errors
+  try {
+    await upsertIndexEntry(toIndexEntry(ticket));
+  } catch (e) {
+    console.error("Tickets index update failed:", e);
+  }
 }
 
 export async function updateTicket(
