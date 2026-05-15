@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,12 +29,64 @@ const emptyForm: FormState = {
   acceptsCash: true,
 };
 
+// Vercel Blob is eventually consistent — after a write, reads can serve
+// stale content for ~10-30s. We mirror writes to localStorage so refreshes
+// on this device still see what was just saved.
+const CACHE_KEY = "lunch-split:roster-cache";
+const CACHE_TTL_MS = 3 * 60 * 1000; // 3 minutes
+
+type Cache = { roster: Person[]; ts: number };
+
+function readCache(): Cache | null {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Cache;
+    if (Date.now() - parsed.ts > CACHE_TTL_MS) {
+      localStorage.removeItem(CACHE_KEY);
+      return null;
+    }
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(roster: Person[]) {
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ roster, ts: Date.now() }));
+  } catch {}
+}
+
+function mergeBySSR(ssr: Person[], cached: Person[]): Person[] {
+  // Prefer the cached version while the cache window is hot — it represents
+  // recent local writes that the blob may not have propagated yet. We still
+  // pick up SSR entries not in the cache (covers writes from other devices).
+  const map = new Map<string, Person>();
+  for (const p of ssr) map.set(p.id, p);
+  for (const p of cached) map.set(p.id, p); // cache wins on conflict
+  return Array.from(map.values());
+}
+
 export function RosterEditor({ initial }: { initial: Person[] }) {
   const [roster, setRoster] = useState(initial);
   const [editingId, setEditingId] = useState<string | "new" | null>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  // Hydration: merge SSR data with any fresh local cache.
+  useEffect(() => {
+    const c = readCache();
+    if (!c) return;
+    setRoster(mergeBySSR(initial, c.roster));
+  }, [initial]);
+
+  // Mirror every roster mutation into the cache.
+  function syncRoster(next: Person[]) {
+    setRoster(next);
+    writeCache(next);
+  }
 
   function startNew() {
     setEditingId("new");
@@ -76,13 +128,9 @@ export function RosterEditor({ initial }: { initial: Person[] }) {
           accountTitle: form.accountTitle.trim() || undefined,
           acceptsCash: form.acceptsCash,
         });
-        setRoster((r) => {
-          const idx = r.findIndex((x) => x.id === person.id);
-          if (idx === -1) return [...r, person];
-          const next = [...r];
-          next[idx] = person;
-          return next;
-        });
+        const idx = roster.findIndex((x) => x.id === person.id);
+        const next = idx === -1 ? [...roster, person] : roster.map((x) => (x.id === person.id ? person : x));
+        syncRoster(next);
         setEditingId(null);
       } catch (e) {
         setErr((e as Error).message);
@@ -95,7 +143,7 @@ export function RosterEditor({ initial }: { initial: Person[] }) {
     startTransition(async () => {
       try {
         await removePersonAction(id);
-        setRoster((r) => r.filter((p) => p.id !== id));
+        syncRoster(roster.filter((p) => p.id !== id));
       } catch (e) {
         setErr((e as Error).message);
       }
