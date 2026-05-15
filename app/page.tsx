@@ -17,17 +17,22 @@ function nowStamp() {
     .toUpperCase();
 }
 
-function relTime(iso: string) {
-  const t = new Date(iso).getTime();
-  const diff = (Date.now() - t) / 1000;
-  if (diff < 60) return "just now";
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 7 * 86400) return `${Math.floor(diff / 86400)}d ago`;
-  return new Date(iso).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-  });
+function fmtBillDate(iso: string) {
+  const d = new Date(iso);
+  const today = new Date();
+  const isToday = d.toDateString() === today.toDateString();
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const isYesterday = d.toDateString() === yesterday.toDateString();
+  if (isToday) return "Today";
+  if (isYesterday) return "Yesterday";
+  return d
+    .toLocaleDateString("en-GB", {
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+    })
+    .toUpperCase();
 }
 
 export default async function Home() {
@@ -175,8 +180,8 @@ function BucketLine({
             <div className="display text-[18px] num">
               ₨ {entry.totalAmount.toLocaleString("en-PK")}
             </div>
-            <div className="text-[10px] text-ink-faint mt-0.5">
-              {entry.payerName} · {settled} · {relTime(entry.createdAt)}
+            <div className="text-[10px] text-ink-faint mt-0.5 font-mono tracking-wider">
+              {fmtBillDate(entry.createdAt)} · {entry.payerName} · {settled}
             </div>
           </div>
         </div>

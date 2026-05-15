@@ -18,12 +18,24 @@ function fmtDate(iso: string) {
   const d = new Date(iso);
   return d
     .toLocaleString("en-GB", {
+      weekday: "short",
       day: "2-digit",
       month: "short",
       year: "numeric",
       hour: "2-digit",
       minute: "2-digit",
       hour12: false,
+    })
+    .toUpperCase();
+}
+
+function fmtDateOnly(iso: string) {
+  return new Date(iso)
+    .toLocaleDateString("en-GB", {
+      weekday: "short",
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
     })
     .toUpperCase();
 }
@@ -91,7 +103,13 @@ export default async function TicketPage({
         <h1 className="display-italic text-[44px] sm:text-[56px] mt-3 leading-[0.9]">
           {ticket.title}
         </h1>
-        <div className="eyebrow mt-3">{fmtDate(ticket.createdAt)}</div>
+        <div className="mt-4">
+          <div className="eyebrow">BILL DATE</div>
+          <div className="display-italic text-[20px] mt-1">{fmtDateOnly(ticket.createdAt)}</div>
+          <div className="text-[10px] text-ink-faint font-mono tracking-wider mt-0.5">
+            CREATED {fmtDate(ticket.createdAt)}
+          </div>
+        </div>
         <div className="text-[12px] text-ink-soft mt-4">
           SERVED BY{" "}
           <span className="display-italic text-[18px] mx-1">{ticket.payer.name}</span>
