@@ -1,10 +1,13 @@
 import { NextResponse } from "next/server";
+import { customAlphabet } from "nanoid";
 import { z } from "zod";
 
-import { db } from "@/lib/db";
-import { participants, tickets } from "@/lib/db/schema";
 import { newSlug } from "@/lib/slug";
 import { splitEvenly } from "@/lib/shares";
+import { putTicket } from "@/lib/store";
+import type { ParticipantStatus, Ticket } from "@/lib/types";
+
+const newParticipantId = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 12);
 
 const payloadSchema = z.object({
   title: z.string().min(1).max(120),
@@ -55,33 +58,41 @@ export async function POST(req: Request) {
   const total = Math.round(data.totalAmount);
   const shares = splitEvenly(total, data.participants.length);
   const slug = newSlug();
+  const now = new Date().toISOString();
 
-  await db.transaction(async (tx) => {
-    const [t] = await tx
-      .insert(tickets)
-      .values({
-        slug,
-        title: data.title,
-        totalAmount: String(total),
-        notes: data.notes ?? null,
-        payerName: data.payerName,
-        payerEmail: data.payerEmail ?? null,
-        payerWhatsapp: data.payerWhatsapp ?? null,
-        payerJazzcash: data.payerJazzcash ?? null,
-        payerEasypaisa: data.payerEasypaisa ?? null,
-        payerIban: data.payerIban ?? null,
-      })
-      .returning();
-    await tx.insert(participants).values(
-      data.participants.map((p, i) => ({
-        ticketId: t.id,
-        name: p.name,
-        email: p.email ?? null,
-        whatsapp: p.whatsapp ?? null,
-        amountOwed: String(shares[i]),
-      })),
-    );
-  });
+  const ticket: Ticket = {
+    slug,
+    title: data.title,
+    totalAmount: total,
+    currency: "PKR",
+    notes: data.notes ?? null,
+    payer: {
+      name: data.payerName,
+      email: data.payerEmail ?? null,
+      whatsapp: data.payerWhatsapp ?? null,
+      jazzcash: data.payerJazzcash ?? null,
+      easypaisa: data.payerEasypaisa ?? null,
+      iban: null,
+      accountTitle: null,
+      acceptsCash: true,
+    },
+    participants: data.participants.map((p, i) => ({
+      id: newParticipantId(),
+      name: p.name,
+      email: p.email ?? null,
+      whatsapp: p.whatsapp ?? null,
+      amountOwed: shares[i],
+      status: "pending" as ParticipantStatus,
+      selfMarkedAt: null,
+      confirmedAt: null,
+    })),
+    reminders: [],
+    status: "open",
+    createdAt: now,
+    closedAt: null,
+  };
+
+  await putTicket(ticket);
 
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   const ticketUrl = `${appUrl}/t/${slug}`;

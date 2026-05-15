@@ -1,0 +1,39 @@
+import { put, list } from "@vercel/blob";
+import type { Ticket } from "./types";
+
+const PREFIX = "tickets/";
+
+function pathFor(slug: string) {
+  return `${PREFIX}${slug}.json`;
+}
+
+export async function getTicket(slug: string): Promise<Ticket | null> {
+  const path = pathFor(slug);
+  const { blobs } = await list({ prefix: path });
+  const exact = blobs.find((b) => b.pathname === path);
+  if (!exact) return null;
+  const res = await fetch(exact.url, { cache: "no-store" });
+  if (!res.ok) return null;
+  return (await res.json()) as Ticket;
+}
+
+export async function putTicket(ticket: Ticket): Promise<void> {
+  await put(pathFor(ticket.slug), JSON.stringify(ticket), {
+    access: "public",
+    contentType: "application/json",
+    allowOverwrite: true,
+    addRandomSuffix: false,
+    cacheControlMaxAge: 0,
+  });
+}
+
+export async function updateTicket(
+  slug: string,
+  mutator: (t: Ticket) => Ticket | Promise<Ticket>,
+): Promise<Ticket> {
+  const current = await getTicket(slug);
+  if (!current) throw new Error("Ticket not found");
+  const next = await mutator(current);
+  await putTicket(next);
+  return next;
+}
