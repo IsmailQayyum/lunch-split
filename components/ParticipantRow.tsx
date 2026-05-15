@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useOptimistic, useState, useTransition } from "react";
 import { Button } from "./ui/button";
 import { normalizeWhatsapp, whatsappUrl, reminderText } from "@/lib/whatsapp";
 import {
@@ -13,6 +13,8 @@ import {
   reopenParticipantAction,
 } from "@/lib/actions/tickets";
 
+type Status = "pending" | "self_marked" | "confirmed" | "cash";
+
 type Props = {
   slug: string;
   ticketUrl: string;
@@ -24,7 +26,7 @@ type Props = {
     email: string | null;
     whatsapp: string | null;
     amountOwed: number;
-    status: "pending" | "self_marked" | "confirmed" | "cash";
+    status: Status;
   };
   ticketOpen: boolean;
   currency: string;
@@ -53,13 +55,20 @@ export function ParticipantRow({
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [hidden, setHidden] = useState(false);
 
-  const settled = participant.status === "confirmed" || participant.status === "cash";
+  // Optimistic status: updates the visible status instantly on click,
+  // syncs to the real value after the server action + revalidatePath.
+  const [optimisticStatus, setOptimisticStatus] = useOptimistic(participant.status);
+
+  const status = optimisticStatus;
+  const settled = status === "confirmed" || status === "cash";
   const waNumber = normalizeWhatsapp(participant.whatsapp);
 
-  function run(fn: () => Promise<unknown>) {
+  function run(opt: Status | null, fn: () => Promise<unknown>) {
     setErr(null);
     startTransition(async () => {
+      if (opt) setOptimisticStatus(opt);
       try {
         await fn();
       } catch (e) {
@@ -87,19 +96,20 @@ export function ParticipantRow({
   const recentlyReminded =
     lastRemindedAt && Date.now() - lastRemindedAt.getTime() < 60 * 60 * 1000;
 
+  if (hidden) return null;
+
   return (
     <div className="group">
-      {/* Top line: dot-leader between name and amount */}
       <div className={`line-item ${settled ? "opacity-60" : ""}`}>
         <div className="flex items-center gap-2 min-w-0">
           <span className="display-italic text-[19px] truncate">{participant.name}</span>
-          {participant.status === "confirmed" && (
+          {status === "confirmed" && (
             <span className="stamp text-moss animate-stamp">✓ Paid</span>
           )}
-          {participant.status === "cash" && (
+          {status === "cash" && (
             <span className="stamp text-moss animate-stamp">Cash</span>
           )}
-          {participant.status === "self_marked" && (
+          {status === "self_marked" && (
             <span className="stamp text-saffron">Awaiting</span>
           )}
         </div>
@@ -109,30 +119,28 @@ export function ParticipantRow({
         </span>
       </div>
 
-      {/* Sub-line: contact info */}
       <div className="text-[11px] text-ink-faint flex items-center gap-2 mt-0.5 ml-0.5">
         <span>
           {[participant.whatsapp, participant.email].filter(Boolean).join(" · ") || "no contact"}
         </span>
-        {participant.status === "pending" && <span className="text-saffron">· pending</span>}
+        {status === "pending" && <span className="text-saffron">· pending</span>}
       </div>
 
       {err && <div className="text-[11px] text-saffron mt-1">{err}</div>}
 
-      {/* Actions */}
       {!settled && ticketOpen && (
         <div className="flex flex-wrap items-center gap-2 mt-3 pl-0.5">
           <Button
             size="sm"
-            onClick={() => run(() => markPaidAction(slug, participant.id))}
-            disabled={pending || participant.status === "self_marked"}
+            onClick={() => run("self_marked", () => markPaidAction(slug, participant.id))}
+            disabled={pending || status === "self_marked"}
           >
-            {participant.status === "self_marked" ? "Sent" : "I paid"}
+            {status === "self_marked" ? "Sent" : "I paid"}
           </Button>
           <Button
             size="sm"
             variant="outline"
-            onClick={() => run(() => confirmPaidAction(slug, participant.id))}
+            onClick={() => run("confirmed", () => confirmPaidAction(slug, participant.id))}
             disabled={pending}
           >
             Confirm
@@ -162,7 +170,7 @@ export function ParticipantRow({
                   disabled={!participant.email}
                   onClick={() => {
                     setMenuOpen(false);
-                    run(() => remindEmailAction(slug, participant.id));
+                    run(null, () => remindEmailAction(slug, participant.id));
                   }}
                 >
                   {participant.email ? "Email reminder" : "No email on file"}
@@ -170,7 +178,7 @@ export function ParticipantRow({
                 <MenuItem
                   onClick={() => {
                     setMenuOpen(false);
-                    run(() => markCashAction(slug, participant.id));
+                    run("cash", () => markCashAction(slug, participant.id));
                   }}
                 >
                   Paid in cash
@@ -178,7 +186,8 @@ export function ParticipantRow({
                 <MenuItem
                   onClick={() => {
                     setMenuOpen(false);
-                    run(() => removeParticipantAction(slug, participant.id));
+                    setHidden(true);
+                    run(null, () => removeParticipantAction(slug, participant.id));
                   }}
                 >
                   Remove entry
@@ -199,7 +208,7 @@ export function ParticipantRow({
           <button
             type="button"
             className="eyebrow ink-link"
-            onClick={() => run(() => reopenParticipantAction(slug, participant.id))}
+            onClick={() => run("pending", () => reopenParticipantAction(slug, participant.id))}
           >
             Reopen
           </button>

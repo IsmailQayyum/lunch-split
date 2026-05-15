@@ -57,8 +57,9 @@ export async function upsertPersonAction(input: unknown): Promise<Person> {
     roster.push(next);
   }
   await putRoster(roster);
-  revalidatePath("/people");
-  revalidatePath("/tickets/new");
+  // Skip revalidatePath — the client manages its own state and the next
+  // navigation will pick up changes. Avoids a redundant server re-render
+  // (which used to trigger a stale blob read and the "vanishing person" bug).
   return next;
 }
 
@@ -66,6 +67,4 @@ export async function removePersonAction(id: string): Promise<void> {
   const roster = await getRoster();
   const updated = roster.filter((p) => p.id !== id);
   await putRoster(updated);
-  revalidatePath("/people");
-  revalidatePath("/tickets/new");
 }
