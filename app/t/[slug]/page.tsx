@@ -1,7 +1,37 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { getTicket } from "@/lib/store";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  const ticket = await getTicket(slug);
+  if (!ticket) return { title: "Ticket not found · Lunch Split" };
+  const settled = ticket.participants.filter(
+    (p) => p.status === "confirmed" || p.status === "cash",
+  ).length;
+  const total = ticket.participants.length;
+  const desc = `Paid by ${ticket.payer.name} · ₨${ticket.totalAmount.toLocaleString("en-PK")} · ${settled}/${total} settled`;
+  return {
+    title: `${ticket.title} · Lunch Split`,
+    description: desc,
+    openGraph: {
+      title: ticket.title,
+      description: desc,
+      type: "website",
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: ticket.title,
+      description: desc,
+    },
+  };
+}
 import { findPersonByEmail, getRoster } from "@/lib/store-roster";
 import { slackShareText, shortShareText } from "@/lib/share-text";
 import type { PayerProfile } from "@/lib/types";
