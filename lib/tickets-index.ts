@@ -97,34 +97,66 @@ export async function upsertIndexEntry(entry: IndexEntry): Promise<void> {
 }
 
 // If the index is missing/empty (e.g., first run after this feature ships),
-// rebuild it by scanning all ticket blobs. One-shot — afterwards the index
-// is maintained incrementally on each putTicket.
+// rebuild it by scanning all ticket blobs. Also backfills "stale" entries
+// — ones whose participantCount > 0 but participants[] is empty (created
+// before the per-participant detail was added to the index).
 export async function readIndexOrRebuild(): Promise<IndexEntry[]> {
   const current = await readIndex();
-  if (current.length > 0) return current;
+
+  // Full rebuild path when empty
+  if (current.length === 0) {
+    const { blobs } = await list({ prefix: "tickets/" });
+    const ticketBlobs = blobs.filter((b) => b.pathname.endsWith(".json"));
+    if (ticketBlobs.length === 0) return [];
+
+    const tickets = (
+      await Promise.all(
+        ticketBlobs.map(async (b) => {
+          try {
+            const res = await fetch(`${b.url}?t=${Date.now()}`, { cache: "no-store" });
+            if (!res.ok) return null;
+            return (await res.json()) as Ticket;
+          } catch {
+            return null;
+          }
+        }),
+      )
+    ).filter((t): t is Ticket => !!t);
+
+    const rebuilt = tickets
+      .map(toIndexEntry)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    await writeIndex(rebuilt);
+    return rebuilt;
+  }
+
+  // Backfill stale entries
+  const stale = current.filter(
+    (e) => e.participantCount > 0 && (!e.participants || e.participants.length === 0),
+  );
+  if (stale.length === 0) return current;
 
   const { blobs } = await list({ prefix: "tickets/" });
-  const ticketBlobs = blobs.filter((b) => b.pathname.endsWith(".json"));
-  if (ticketBlobs.length === 0) return [];
-
-  const tickets = (
-    await Promise.all(
-      ticketBlobs.map(async (b) => {
-        try {
-          const res = await fetch(`${b.url}?t=${Date.now()}`, { cache: "no-store" });
-          if (!res.ok) return null;
-          return (await res.json()) as Ticket;
-        } catch {
-          return null;
-        }
-      }),
-    )
-  ).filter((t): t is Ticket => !!t);
-
-  const rebuilt = tickets
-    .map(toIndexEntry)
-    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-
-  await writeIndex(rebuilt);
-  return rebuilt;
+  const byPath = new Map(blobs.map((b) => [b.pathname, b]));
+  let mutated = false;
+  for (const e of stale) {
+    const b = byPath.get(`tickets/${e.slug}.json`);
+    if (!b) continue;
+    try {
+      const res = await fetch(`${b.url}?t=${Date.now()}`, { cache: "no-store" });
+      if (!res.ok) continue;
+      const t = (await res.json()) as Ticket;
+      const fresh = toIndexEntry(t);
+      const idx = current.findIndex((x) => x.slug === e.slug);
+      if (idx >= 0) {
+        current[idx] = fresh;
+        mutated = true;
+      }
+    } catch {
+      // skip
+    }
+  }
+  if (mutated) await writeIndex(current);
+  return current;
 }
