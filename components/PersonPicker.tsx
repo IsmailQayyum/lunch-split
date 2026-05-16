@@ -96,9 +96,9 @@ export function PersonPicker({ roster, selectedIds, onToggle, onAdded }: Props) 
           </span>
         </button>
 
-        {/* Dropdown panel */}
+        {/* Dropdown panel — pushes content down rather than overlapping */}
         {open && (
-          <div className="absolute left-0 right-0 top-full mt-1 z-30 bg-paper-light border-[1.5px] border-ink shadow-xl animate-fade-up">
+          <div className="mt-1 bg-paper-light border-[1.5px] border-ink shadow-md animate-fade-up">
             {roster.length === 0 && !adding && (
               <div className="text-[12px] text-ink-soft italic text-center py-6 px-3">
                 No saved people yet. Add the lunch crew below.
