@@ -86,7 +86,7 @@ export function PayerPicker({ roster, selectedId, onSelect, onAdded }: Props) {
           )}
 
           {roster.length > 0 && (
-            <ul className="max-h-[300px] overflow-y-auto">
+            <ul className="max-h-72 overflow-y-auto scroll-fade">
               {roster.map((p) => {
                 const on = selectedId === p.id;
                 return (

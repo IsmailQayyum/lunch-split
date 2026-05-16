@@ -80,7 +80,7 @@ export function PersonPicker({ roster, selectedIds, onToggle, onAdded }: Props) 
           )}
 
           {roster.length > 0 && (
-            <ul className="max-h-[300px] overflow-y-auto">
+            <ul className="max-h-72 overflow-y-auto scroll-fade">
               {roster.map((p) => {
                 const on = selectedIds.includes(p.id);
                 return (

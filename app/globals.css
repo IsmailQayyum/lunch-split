@@ -57,6 +57,12 @@
     background: var(--ink-faint);
     border-radius: 4px;
   }
+
+  /* Subtle fade at the bottom of a scrollable list to hint at more content */
+  .scroll-fade {
+    -webkit-mask-image: linear-gradient(to bottom, black 0%, black calc(100% - 18px), transparent 100%);
+    mask-image: linear-gradient(to bottom, black 0%, black calc(100% - 18px), transparent 100%);
+  }
 }
 
 @layer components {
