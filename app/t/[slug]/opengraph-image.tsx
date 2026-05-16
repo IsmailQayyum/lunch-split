@@ -58,11 +58,53 @@ export default async function OGImage({ params }: { params: { slug: string } }) 
   const SAFFRON = "#b8401f";
   const MOSS = "#3e6131";
 
-  // Cap visible rows so the list never overlaps the totals/footer block.
-  // 1200x630 leaves room for ~4 rows after the header/title/meta/rule above,
-  // plus the totals + footer band below.
-  const visible = ticket.participants.slice(0, 4);
+  // 2-column layout when 4+ participants so the list never overlaps the
+  // totals/footer block. Cap visible at 6 (3 per column) — overflow line
+  // carries the rest.
+  const visible = ticket.participants.slice(0, 6);
   const overflow = ticket.participants.length - visible.length;
+  const useTwoCols = visible.length >= 4;
+  const half = Math.ceil(visible.length / 2);
+  const leftCol = useTwoCols ? visible.slice(0, half) : visible;
+  const rightCol = useTwoCols ? visible.slice(half) : [];
+
+  const rowFontSize = useTwoCols ? 20 : 22;
+  const amountFontSize = useTwoCols ? 22 : 24;
+
+  const renderRow = (p: (typeof visible)[number], moss: string, saffron: string) => {
+    const isPaid = p.status === "confirmed" || p.status === "cash";
+    return (
+      <div
+        key={p.id}
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "baseline",
+          fontSize: rowFontSize,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "baseline", gap: 10 }}>
+          <span style={{ fontStyle: "italic" }}>{p.name}</span>
+          <span
+            style={{
+              fontFamily: "monospace",
+              fontSize: 11,
+              letterSpacing: 2,
+              padding: "2px 6px",
+              border: `1.5px solid ${isPaid ? moss : saffron}`,
+              color: isPaid ? moss : saffron,
+              fontWeight: 700,
+            }}
+          >
+            {isPaid ? "PAID" : "PENDING"}
+          </span>
+        </div>
+        <span style={{ fontFamily: "monospace", fontSize: amountFontSize }}>
+          ₨ {p.amountOwed.toLocaleString("en-PK")}
+        </span>
+      </div>
+    );
+  };
 
   return new ImageResponse(
     (
@@ -151,42 +193,32 @@ export default async function OGImage({ params }: { params: { slug: string } }) 
             }}
           />
 
-          {/* Itemized */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
-            {visible.map((p) => {
-              const isPaid = p.status === "confirmed" || p.status === "cash";
-              return (
+          {/* Itemized — single column for ≤3 participants, 2 columns for 4+ */}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+            <div style={{ display: "flex", gap: useTwoCols ? 60 : 0 }}>
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: 8,
+                  flex: 1,
+                }}
+              >
+                {leftCol.map((p) => renderRow(p, MOSS, SAFFRON))}
+              </div>
+              {useTwoCols && (
                 <div
-                  key={p.id}
                   style={{
                     display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "baseline",
-                    fontSize: 22,
+                    flexDirection: "column",
+                    gap: 8,
+                    flex: 1,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
-                    <span style={{ fontStyle: "italic" }}>{p.name}</span>
-                    <span
-                      style={{
-                        fontFamily: "monospace",
-                        fontSize: 12,
-                        letterSpacing: 2,
-                        padding: "2px 7px",
-                        border: `1.5px solid ${isPaid ? MOSS : SAFFRON}`,
-                        color: isPaid ? MOSS : SAFFRON,
-                        fontWeight: 700,
-                      }}
-                    >
-                      {isPaid ? "PAID" : "PENDING"}
-                    </span>
-                  </div>
-                  <span style={{ fontFamily: "monospace", fontSize: 24 }}>
-                    ₨ {p.amountOwed.toLocaleString("en-PK")}
-                  </span>
+                  {rightCol.map((p) => renderRow(p, MOSS, SAFFRON))}
                 </div>
-              );
-            })}
+              )}
+            </div>
             {overflow > 0 && (
               <div
                 style={{
