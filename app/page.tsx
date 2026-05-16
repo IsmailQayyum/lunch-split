@@ -170,6 +170,7 @@ function BucketLine({
   const pending = entry.participants.filter(
     (p) => p.status !== "confirmed" && p.status !== "cash",
   );
+  const paidTotal = paid.reduce((s, p) => s + p.amountOwed, 0);
   const pendingTotal = pending.reduce((s, p) => s + p.amountOwed, 0);
 
   const dateBlock =
@@ -234,8 +235,14 @@ function BucketLine({
               ) : (
                 <ul className="space-y-0.5">
                   {paid.map((p, i) => (
-                    <li key={`${p.name}-${i}`} className="display-italic text-[15px] leading-tight">
-                      {p.name}
+                    <li
+                      key={`paid-${i}`}
+                      className="display-italic text-[15px] leading-tight flex items-baseline gap-2"
+                    >
+                      <span className="truncate flex-1">{p.name}</span>
+                      <span className="text-[10px] font-mono num text-moss shrink-0">
+                        ₨{p.amountOwed.toLocaleString("en-PK")}
+                      </span>
                     </li>
                   ))}
                 </ul>
@@ -251,11 +258,11 @@ function BucketLine({
                 <ul className="space-y-0.5">
                   {pending.map((p, i) => (
                     <li
-                      key={`${p.name}-${i}`}
+                      key={`pending-${i}`}
                       className="display-italic text-[15px] leading-tight flex items-baseline gap-2"
                     >
-                      <span className="truncate">{p.name}</span>
-                      <span className="text-[10px] font-mono num text-ink-faint shrink-0">
+                      <span className="truncate flex-1">{p.name}</span>
+                      <span className="text-[10px] font-mono num text-saffron shrink-0">
                         ₨{p.amountOwed.toLocaleString("en-PK")}
                       </span>
                     </li>
@@ -264,12 +271,20 @@ function BucketLine({
               )}
             </div>
           </div>
-          {kind === "open" && pendingTotal > 0 && (
-            <div className="mt-3 pt-3 border-t border-dashed border-ink-faint/40 flex items-baseline justify-between">
-              <span className="eyebrow">OUTSTANDING ON THIS</span>
-              <span className="display text-[18px] num text-saffron">
-                ₨ {pendingTotal.toLocaleString("en-PK")}
-              </span>
+          {(paidTotal > 0 || pendingTotal > 0) && (
+            <div className="mt-3 pt-3 border-t border-dashed border-ink-faint/40 grid grid-cols-2 gap-4">
+              <div className="flex items-baseline justify-between">
+                <span className="eyebrow text-moss">RECEIVED</span>
+                <span className="display text-[16px] num text-moss">
+                  ₨{paidTotal.toLocaleString("en-PK")}
+                </span>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="eyebrow text-saffron">PENDING</span>
+                <span className="display text-[16px] num text-saffron">
+                  ₨{pendingTotal.toLocaleString("en-PK")}
+                </span>
+              </div>
             </div>
           )}
         </div>
