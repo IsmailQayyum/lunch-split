@@ -7,6 +7,7 @@ import { splitEvenly } from "@/lib/shares";
 import { putTicket } from "@/lib/store";
 import { findPersonByEmail, getRoster } from "@/lib/store-roster";
 import type { ParticipantStatus, Ticket } from "@/lib/types";
+import { notifyTicketCreated } from "@/lib/slack-notify";
 
 const newParticipantId = customAlphabet(
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
@@ -113,6 +114,7 @@ export async function POST(req: Request) {
   };
 
   await putTicket(ticket);
+  notifyTicketCreated(ticket).catch(() => {});
 
   const appUrl = process.env.APP_URL ?? "http://localhost:3000";
   const ticketUrl = `${appUrl}/t/${slug}`;

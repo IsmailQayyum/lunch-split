@@ -10,6 +10,14 @@ import { splitEvenly } from "@/lib/shares";
 import { sendReminderEmail } from "@/lib/email";
 import { getTicket, putTicket, updateTicket } from "@/lib/store";
 import type { Participant, Ticket, ParticipantStatus } from "@/lib/types";
+import {
+  notifyMarkPaid,
+  notifyConfirmed,
+  notifyMarkCash,
+  notifyTicketClosed,
+  notifyTicketReopened,
+  notifyTicketCreated,
+} from "@/lib/slack-notify";
 
 const newParticipantId = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 12);
 
@@ -87,6 +95,7 @@ export async function createTicketAction(input: unknown) {
   };
 
   await putTicket(ticket);
+  notifyTicketCreated(ticket).catch(() => {});
   redirect(`/t/${slug}?created=1`);
 }
 
@@ -126,6 +135,12 @@ export async function markPaidAction(slug: string, participantId: string) {
     if (p.status === "confirmed" || p.status === "cash") return p;
     return { ...p, status: "self_marked", selfMarkedAt: new Date().toISOString() };
   }, false);
+  // Fire-and-forget Slack notification
+  getTicket(slug).then((t) => {
+    if (!t) return;
+    const p = t.participants.find((x) => x.id === participantId);
+    if (p) notifyMarkPaid(t, p);
+  }).catch(() => {});
 }
 
 export async function confirmPaidAction(slug: string, participantId: string) {
@@ -133,6 +148,12 @@ export async function confirmPaidAction(slug: string, participantId: string) {
     if (p.status === "confirmed" || p.status === "cash") return p;
     return { ...p, status: "confirmed", confirmedAt: new Date().toISOString() };
   });
+  getTicket(slug).then((t) => {
+    if (!t) return;
+    const p = t.participants.find((x) => x.id === participantId);
+    if (p) notifyConfirmed(t, p);
+    if (t.status === "closed") notifyTicketClosed(t);
+  }).catch(() => {});
 }
 
 export async function markCashAction(slug: string, participantId: string) {
@@ -141,6 +162,12 @@ export async function markCashAction(slug: string, participantId: string) {
     status: "cash",
     confirmedAt: new Date().toISOString(),
   }));
+  getTicket(slug).then((t) => {
+    if (!t) return;
+    const p = t.participants.find((x) => x.id === participantId);
+    if (p) notifyMarkCash(t, p);
+    if (t.status === "closed") notifyTicketClosed(t);
+  }).catch(() => {});
 }
 
 export async function reopenParticipantAction(slug: string, participantId: string) {
@@ -206,11 +233,17 @@ export async function logWhatsappReminderAction(slug: string, participantId: str
 export async function closeTicketAction(slug: string) {
   await updateTicket(slug, (t) => ({ ...t, status: "closed", closedAt: new Date().toISOString() }));
   revalidatePath(`/t/${slug}`);
+  getTicket(slug).then((t) => {
+    if (t) notifyTicketClosed(t);
+  }).catch(() => {});
 }
 
 export async function reopenTicketAction(slug: string) {
   await updateTicket(slug, (t) => ({ ...t, status: "open", closedAt: null }));
   revalidatePath(`/t/${slug}`);
+  getTicket(slug).then((t) => {
+    if (t) notifyTicketReopened(t);
+  }).catch(() => {});
 }
 
 export async function updateParticipantAmountAction(
