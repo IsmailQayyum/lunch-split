@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { WALLET_APPS, type WalletApp } from "@/lib/store-roster";
+import { WALLET_APPS, type WalletApp } from "@/lib/wallet-apps";
 
 type Payer = {
   name: string;

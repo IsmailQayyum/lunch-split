@@ -1,28 +1,10 @@
 import "server-only";
 import { redis, CAS_LUA, casBackoff, CAS_MAX_ATTEMPTS } from "./redis";
+import { WALLET_APPS, type Person, type WalletApp } from "./wallet-apps";
 
-export type WalletApp = "jazzcash" | "easypaisa" | "nayapay" | "sadapay";
-
-export const WALLET_APPS: { id: WalletApp; label: string }[] = [
-  { id: "jazzcash", label: "JazzCash" },
-  { id: "easypaisa", label: "EasyPaisa" },
-  { id: "nayapay", label: "NayaPay" },
-  { id: "sadapay", label: "SadaPay" },
-];
-
-export type Person = {
-  id: string;
-  name: string;
-  email: string | null;
-  whatsapp: string | null;
-  // Mobile number — typically shared across multiple wallet apps
-  walletNumber: string | null;
-  walletApps: WalletApp[];
-  // Bank
-  iban: string | null;
-  accountTitle: string | null;
-  acceptsCash: boolean;
-};
+// Re-export so existing server-side import sites keep working without churn.
+export { WALLET_APPS, findPersonByEmail } from "./wallet-apps";
+export type { Person, WalletApp } from "./wallet-apps";
 
 const KEY = "roster";
 
@@ -39,7 +21,6 @@ function normalize(raw: unknown): Person | null {
       ) as WalletApp[])
     : [];
 
-  // Legacy: if old jazzcash/easypaisa fields are set, fold into new model
   const legacyJazz = typeof o.jazzcash === "string" ? o.jazzcash : null;
   const legacyEasy = typeof o.easypaisa === "string" ? o.easypaisa : null;
   if (!walletNumber && (legacyJazz || legacyEasy)) {
@@ -79,8 +60,6 @@ export async function putRoster(roster: Person[]): Promise<void> {
   await redis.set(KEY, JSON.stringify(roster));
 }
 
-// Atomic CAS-based mutator. Prefer this over the read/putRoster pattern in
-// action handlers — eliminates race conditions when two edits land at once.
 export async function updateRoster(
   mutator: (r: Person[]) => Person[] | Promise<Person[]>,
 ): Promise<Person[]> {
@@ -109,10 +88,4 @@ export async function updateRoster(
     await casBackoff();
   }
   throw new Error("updateRoster failed after retries");
-}
-
-export function findPersonByEmail(roster: Person[], email: string | null | undefined) {
-  if (!email) return null;
-  const target = email.toLowerCase();
-  return roster.find((p) => (p.email ?? "").toLowerCase() === target) ?? null;
 }

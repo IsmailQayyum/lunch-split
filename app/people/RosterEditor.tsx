@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { upsertPersonAction, removePersonAction } from "@/lib/actions/roster";
-import { WALLET_APPS, type Person, type WalletApp } from "@/lib/store-roster";
+import { WALLET_APPS, type Person, type WalletApp } from "@/lib/wallet-apps";
 
 type FormState = {
   name: string;
