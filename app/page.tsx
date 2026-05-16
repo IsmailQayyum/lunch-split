@@ -186,7 +186,7 @@ function BucketLine({
 
   return (
     <li
-      className="relative group animate-fade-up"
+      className="relative group animate-fade-up hover:z-30"
       style={{ animationDelay: `${delayMs}ms` }}
     >
       <Link href={`/t/${entry.slug}`} className="block">
@@ -217,12 +217,12 @@ function BucketLine({
       {entry.participants.length > 0 && (
         <div
           className="
-            absolute left-0 right-0 top-full mt-1 z-20
+            absolute left-0 right-0 top-full mt-1 z-30
             invisible opacity-0 translate-y-1
             group-hover:visible group-hover:opacity-100 group-hover:translate-y-0
             transition-all duration-200 ease-out
             pointer-events-none
-            bg-paper-light border border-ink/40 p-4 shadow-lg
+            bg-paper-light border-[1.5px] border-ink p-4 shadow-xl
           "
         >
           <div className="grid grid-cols-2 gap-4 text-[12px]">
