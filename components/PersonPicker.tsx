@@ -96,9 +96,20 @@ export function PersonPicker({ roster, selectedIds, onToggle, onAdded }: Props) 
           </span>
         </button>
 
-        {/* Dropdown panel — pushes content down rather than overlapping */}
+        {/* Backdrop dims/locks the rest of the page while picking */}
         {open && (
-          <div className="mt-1 bg-paper-light border-[1.5px] border-ink shadow-md animate-fade-up">
+          <div
+            className="fixed inset-0 z-40 bg-ink/30 backdrop-blur-[2px] animate-fade-up"
+            onClick={() => {
+              setOpen(false);
+              setAdding(false);
+            }}
+            aria-hidden
+          />
+        )}
+        {/* Dropdown panel — overlays the form, can't conflict with content below */}
+        {open && (
+          <div className="absolute left-0 right-0 top-full mt-1 z-50 bg-paper-light border-[1.5px] border-ink shadow-2xl animate-fade-up">
             {roster.length === 0 && !adding && (
               <div className="text-[12px] text-ink-soft italic text-center py-6 px-3">
                 No saved people yet. Add the lunch crew below.
