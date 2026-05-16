@@ -58,16 +58,18 @@ export function ParticipantRow({
   const [hidden, setHidden] = useState(false);
 
   // Sticky local override: updates the visible status instantly on click and
-  // holds it until the prop catches up. Avoids the useOptimistic flicker where
-  // the optimistic state drops the moment the server action returns but the
-  // Blob-backed re-render can still serve stale data for a few seconds.
+  // holds it for a fixed time window after the click. Avoids the flicker that
+  // happens when Vercel Blob's CDN briefly serves stale data: the prop can
+  // appear fresh → revert to stale → become fresh again over ~10 seconds.
+  // Clearing on first prop match would cause a visible revert in the middle.
+  // 15 seconds is well past the observed consistency window.
   const [localStatus, setLocalStatus] = useState<Status | null>(null);
 
   useEffect(() => {
-    if (localStatus !== null && participant.status === localStatus) {
-      setLocalStatus(null);
-    }
-  }, [participant.status, localStatus]);
+    if (localStatus === null) return;
+    const t = setTimeout(() => setLocalStatus(null), 15000);
+    return () => clearTimeout(t);
+  }, [localStatus]);
 
   const status = localStatus ?? participant.status;
   const settled = status === "confirmed" || status === "cash";
