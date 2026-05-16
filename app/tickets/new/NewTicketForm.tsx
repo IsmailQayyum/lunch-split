@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PersonPicker } from "@/components/PersonPicker";
+import { PayerPicker } from "@/components/PayerPicker";
 import { createTicketAction } from "@/lib/actions/tickets";
 import { splitEvenly } from "@/lib/shares";
 import type { Person } from "@/lib/store-roster";
@@ -135,44 +136,12 @@ export function NewTicketForm({
           </div>
         ) : (
           <>
-            <ul className="border-t border-dashed border-ink-faint/50">
-              {roster.map((p) => {
-                const on = payerId === p.id;
-                return (
-                  <li key={p.id} className="border-b border-dashed border-ink-faint/50">
-                    <button
-                      type="button"
-                      onClick={() => selectAsPayer(p.id)}
-                      className={`w-full text-left transition-colors py-2.5 group ${
-                        on ? "" : "hover:text-saffron"
-                      }`}
-                      aria-pressed={on}
-                    >
-                      <div className="line-item">
-                        <span
-                          className={`display-italic text-[20px] truncate ${
-                            on ? "text-saffron" : "text-ink-soft"
-                          }`}
-                        >
-                          {p.name}
-                        </span>
-                        <span className="leader" />
-                        <span
-                          className={`inline-flex items-center justify-center w-5 h-5 rounded-full border-[1.5px] transition-all shrink-0 ${
-                            on ? "border-saffron bg-saffron" : "border-ink-faint"
-                          }`}
-                          aria-hidden
-                        >
-                          {on && (
-                            <span className="w-2 h-2 rounded-full bg-paper-light"></span>
-                          )}
-                        </span>
-                      </div>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+            <PayerPicker
+              roster={roster}
+              selectedId={payerId}
+              onSelect={selectAsPayer}
+              onAdded={(p) => setRoster((r) => (r.some((x) => x.id === p.id) ? r : [...r, p]))}
+            />
             {payer && !payerHasMethod && (
               <div className="mt-4 text-[12px] text-saffron italic">
                 Heads up — {payer.name} has no payment methods saved.{" "}
