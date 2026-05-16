@@ -37,11 +37,6 @@ export default async function OGImage({ params }: { params: { slug: string } }) 
   const paid = ticket.participants.filter(
     (p) => p.status === "confirmed" || p.status === "cash",
   );
-  const pending = ticket.participants.filter(
-    (p) => p.status !== "confirmed" && p.status !== "cash",
-  );
-  const pendingTotal = pending.reduce((s, p) => s + p.amountOwed, 0);
-  const paidTotal = paid.reduce((s, p) => s + p.amountOwed, 0);
 
   const billDate = new Date(ticket.createdAt).toLocaleDateString("en-GB", {
     weekday: "short",
@@ -59,10 +54,9 @@ export default async function OGImage({ params }: { params: { slug: string } }) 
   const MOSS = "#3e6131";
 
   // 2-column layout when 4+ participants so the list never overlaps the
-  // totals/footer block. Cap visible at 6 (3 per column) — overflow line
-  // carries the rest.
+  // totals/footer block. Cap visible at 6 (3 per column) — the footer's
+  // "SETTLED N/M" already conveys total headcount for any overflow.
   const visible = ticket.participants.slice(0, 6);
-  const overflow = ticket.participants.length - visible.length;
   const useTwoCols = visible.length >= 4;
   const half = Math.ceil(visible.length / 2);
   const leftCol = useTwoCols ? visible.slice(0, half) : visible;
@@ -219,55 +213,32 @@ export default async function OGImage({ params }: { params: { slug: string } }) 
                 </div>
               )}
             </div>
-            {overflow > 0 && (
-              <div
-                style={{
-                  display: "flex",
-                  fontSize: 17,
-                  color: INK_FAINT,
-                  fontStyle: "italic",
-                  marginTop: 2,
-                }}
-              >
-                + {overflow} more on the receipt
-              </div>
-            )}
           </div>
 
-          {/* Totals row */}
+          {/* Totals — single TOTAL block on the right; per-person paid/pending
+              is already conveyed by each row's badge above. */}
           <div
             style={{
               display: "flex",
               borderTop: `1px dashed ${INK_FAINT}`,
-              paddingTop: 18,
-              marginTop: 18,
+              paddingTop: 16,
+              marginTop: 14,
               alignItems: "baseline",
-              justifyContent: "space-between",
+              justifyContent: "flex-end",
             }}
           >
-            <div style={{ display: "flex", gap: 30 }}>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontFamily: "monospace", fontSize: 14, letterSpacing: 2, color: MOSS }}>
-                  RECEIVED
-                </span>
-                <span style={{ fontFamily: "monospace", fontSize: 26, color: MOSS }}>
-                  ₨ {paidTotal.toLocaleString("en-PK")}
-                </span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column" }}>
-                <span style={{ fontFamily: "monospace", fontSize: 14, letterSpacing: 2, color: SAFFRON }}>
-                  PENDING
-                </span>
-                <span style={{ fontFamily: "monospace", fontSize: 26, color: SAFFRON }}>
-                  ₨ {pendingTotal.toLocaleString("en-PK")}
-                </span>
-              </div>
-            </div>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
-              <span style={{ fontFamily: "monospace", fontSize: 14, letterSpacing: 3, color: INK_FAINT }}>
+              <span
+                style={{
+                  fontFamily: "monospace",
+                  fontSize: 14,
+                  letterSpacing: 3,
+                  color: INK_FAINT,
+                }}
+              >
                 TOTAL
               </span>
-              <span style={{ fontFamily: "monospace", fontSize: 54, fontWeight: 700 }}>
+              <span style={{ fontFamily: "monospace", fontSize: 50, fontWeight: 700 }}>
                 ₨ {ticket.totalAmount.toLocaleString("en-PK")}
               </span>
             </div>

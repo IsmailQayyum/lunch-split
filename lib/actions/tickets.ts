@@ -93,7 +93,7 @@ export async function createTicketAction(input: unknown) {
 
   await putTicket(ticket);
   await notifySlack(
-    `🍱 *${ticket.title}* — new lunch ticket\n_₨ ${ticket.totalAmount.toLocaleString("en-PK")} · paid by ${ticket.payer.name} · ${ticket.participants.length} to settle_\n${ticketUrl(slug)}`,
+    `🍱 *${ticket.title}* — new lunch ticket\n₨ ${ticket.totalAmount.toLocaleString("en-PK")} · paid by ${ticket.payer.name} · ${ticket.participants.length} to settle\n${ticketUrl(slug)}`,
   );
   redirect(`/t/${slug}?created=1`);
 }
@@ -136,7 +136,7 @@ async function mutateParticipant(
 async function notifyAutoCloseIfFlipped(before: Ticket, after: Ticket) {
   if (before.status === "open" && after.status === "closed") {
     await notifySlack(
-      `🎉 *${after.title}* — everyone settled\n_₨ ${after.totalAmount.toLocaleString("en-PK")} collected · ${after.participants.length}/${after.participants.length} done_\n${ticketUrl(after.slug)}`,
+      `🎉 *${after.title}* — everyone settled\n₨ ${after.totalAmount.toLocaleString("en-PK")} collected · ${after.participants.length}/${after.participants.length} done\n${ticketUrl(after.slug)}`,
     );
   }
 }
@@ -154,7 +154,7 @@ export async function markPaidAction(slug: string, participantId: string) {
   const beforeP = before.participants.find((x) => x.id === participantId);
   if (beforeP && beforeP.status !== participant.status) {
     await notifySlack(
-      `🟡 *${participant.name}* marked paid on _${after.title}_\n_₨ ${participant.amountOwed.toLocaleString("en-PK")} · awaiting ${after.payer.name}'s confirmation_`,
+      `🟡 *${participant.name}* marked paid on *${after.title}*\n₨ ${participant.amountOwed.toLocaleString("en-PK")} · awaiting ${after.payer.name}'s confirmation`,
     );
   }
 }
@@ -167,7 +167,7 @@ export async function confirmPaidAction(slug: string, participantId: string) {
   const beforeP = before.participants.find((x) => x.id === participantId);
   if (beforeP && beforeP.status !== participant.status) {
     await notifySlack(
-      `✅ *${participant.name}* settled on _${after.title}_\n_₨ ${participant.amountOwed.toLocaleString("en-PK")} · ${settledOf(after)}/${after.participants.length} done_`,
+      `✅ *${participant.name}* settled on *${after.title}*\n₨ ${participant.amountOwed.toLocaleString("en-PK")} · ${settledOf(after)}/${after.participants.length} done`,
     );
   }
   await notifyAutoCloseIfFlipped(before, after);
@@ -182,7 +182,7 @@ export async function markCashAction(slug: string, participantId: string) {
   const beforeP = before.participants.find((x) => x.id === participantId);
   if (beforeP && beforeP.status !== "cash") {
     await notifySlack(
-      `💵 *${participant.name}* paid cash on _${after.title}_\n_₨ ${participant.amountOwed.toLocaleString("en-PK")} · ${settledOf(after)}/${after.participants.length} done_`,
+      `💵 *${participant.name}* paid cash on *${after.title}*\n₨ ${participant.amountOwed.toLocaleString("en-PK")} · ${settledOf(after)}/${after.participants.length} done`,
     );
   }
   await notifyAutoCloseIfFlipped(before, after);
@@ -257,7 +257,7 @@ export async function closeTicketAction(slug: string) {
   revalidatePath(`/t/${slug}`);
   if (wasOpen) {
     await notifySlack(
-      `🔒 *${after.title}* closed by *${after.payer.name}*\n_${settledOf(after)}/${after.participants.length} settled at time of close_\n${ticketUrl(after.slug)}`,
+      `🔒 *${after.title}* closed by *${after.payer.name}*\n${settledOf(after)}/${after.participants.length} settled at close\n${ticketUrl(after.slug)}`,
     );
   }
 }
