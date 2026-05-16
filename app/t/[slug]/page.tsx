@@ -16,19 +16,24 @@ export async function generateMetadata({
     (p) => p.status === "confirmed" || p.status === "cash",
   ).length;
   const total = ticket.participants.length;
-  const desc = `Paid by ${ticket.payer.name} · ₨${ticket.totalAmount.toLocaleString("en-PK")} · ${settled}/${total} settled`;
+  const names = ticket.participants.map((p) => p.name);
+  const namesList = names.length > 0 ? names.join(", ") : "no participants yet";
+  const desc = `₨${ticket.totalAmount.toLocaleString("en-PK")} paid by ${ticket.payer.name} · ${settled}/${total} settled\n${namesList}`;
+  const appUrl = process.env.APP_URL ?? "https://lunch-split.vercel.app";
   return {
     title: `${ticket.title} · Lunch Split`,
     description: desc,
     openGraph: {
-      title: ticket.title,
-      description: desc,
+      title: `🍱 ${ticket.title} — ₨${ticket.totalAmount.toLocaleString("en-PK")}`,
+      description: `Paid by ${ticket.payer.name} · ${settled}/${total} settled\nSplitting between: ${namesList}`,
       type: "website",
+      url: `${appUrl}/t/${slug}`,
+      siteName: "Lunch Split",
     },
     twitter: {
       card: "summary_large_image",
-      title: ticket.title,
-      description: desc,
+      title: `🍱 ${ticket.title} — ₨${ticket.totalAmount.toLocaleString("en-PK")}`,
+      description: `Paid by ${ticket.payer.name} · ${settled}/${total} settled\nSplitting between: ${namesList}`,
     },
   };
 }
