@@ -13,3 +13,4 @@ drizzle/meta
 next-env.d.ts
 
 .vercel
+.env*.local

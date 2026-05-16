@@ -1,46 +1,22 @@
-import { put, head } from "@vercel/blob";
+import "server-only";
 import type { Ticket } from "./types";
 import { upsertIndexEntry, toIndexEntry } from "./tickets-index";
+import { redis, CAS_LUA, casBackoff, CAS_MAX_ATTEMPTS } from "./redis";
 
-const PREFIX = "tickets/";
-
-function pathFor(slug: string) {
-  return `${PREFIX}${slug}.json`;
-}
+const keyTicket = (slug: string) => `ticket:${slug}`;
 
 export async function getTicket(slug: string): Promise<Ticket | null> {
-  const path = pathFor(slug);
-  let url: string;
-  let stamp: number;
+  const raw = await redis.get<string>(keyTicket(slug));
+  if (!raw) return null;
   try {
-    // head() hits Vercel Blob's metadata API directly — not the CDN — so
-    // it's guaranteed fresh after a put().
-    const meta = await head(path);
-    url = meta.url;
-    stamp = meta.uploadedAt.getTime();
+    return JSON.parse(raw) as Ticket;
   } catch {
-    // BlobNotFoundError (or transient failure) -> treat as missing
     return null;
   }
-  // Use uploadedAt as cache-bust: it changes on every overwrite, so each
-  // version gets a deterministically-unique URL the CDN hasn't seen.
-  // Date.now()-based busting was not reliable — the CDN appeared to serve
-  // stale content under the same path despite the changing query string.
-  const bustUrl = `${url}?v=${stamp}`;
-  const res = await fetch(bustUrl, { cache: "no-store" });
-  if (!res.ok) return null;
-  return (await res.json()) as Ticket;
 }
 
 export async function putTicket(ticket: Ticket): Promise<void> {
-  await put(pathFor(ticket.slug), JSON.stringify(ticket), {
-    access: "public",
-    contentType: "application/json",
-    allowOverwrite: true,
-    addRandomSuffix: false,
-    cacheControlMaxAge: 0,
-  });
-  // Best-effort index update — don't fail the save if this errors
+  await redis.set(keyTicket(ticket.slug), JSON.stringify(ticket));
   try {
     await upsertIndexEntry(toIndexEntry(ticket));
   } catch (e) {
@@ -48,13 +24,45 @@ export async function putTicket(ticket: Ticket): Promise<void> {
   }
 }
 
+// Atomic read-modify-write via Lua-based CAS. The mutator runs on the
+// JS side (so it can be arbitrary), and we only commit if the underlying
+// key still holds exactly the value we read. On conflict, we retry with
+// the fresh value — works because participant mutations are idempotent
+// or naturally re-applicable.
 export async function updateTicket(
   slug: string,
   mutator: (t: Ticket) => Ticket | Promise<Ticket>,
 ): Promise<Ticket> {
-  const current = await getTicket(slug);
-  if (!current) throw new Error("Ticket not found");
-  const next = await mutator(current);
-  await putTicket(next);
-  return next;
+  for (let attempt = 0; attempt < CAS_MAX_ATTEMPTS; attempt++) {
+    const currentRaw = await redis.get<string>(keyTicket(slug));
+    if (!currentRaw) throw new Error("Ticket not found");
+
+    let current: Ticket;
+    try {
+      current = JSON.parse(currentRaw) as Ticket;
+    } catch {
+      throw new Error("Ticket corrupted");
+    }
+
+    const next = await mutator(current);
+    const nextStr = JSON.stringify(next);
+
+    const result = (await redis.eval(CAS_LUA, [keyTicket(slug)], [
+      currentRaw,
+      nextStr,
+    ])) as string;
+
+    if (result === nextStr) {
+      try {
+        await upsertIndexEntry(toIndexEntry(next));
+      } catch (e) {
+        console.error("Tickets index update failed:", e);
+      }
+      return next;
+    }
+
+    // CAS lost — somebody else wrote in between. Back off briefly and retry.
+    await casBackoff();
+  }
+  throw new Error("updateTicket failed after retries (high contention)");
 }

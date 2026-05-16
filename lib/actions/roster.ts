@@ -3,7 +3,13 @@
 import { customAlphabet } from "nanoid";
 import { z } from "zod";
 
-import { getRoster, putRoster, WALLET_APPS, type Person, type WalletApp } from "@/lib/store-roster";
+import {
+  getRoster,
+  updateRoster,
+  WALLET_APPS,
+  type Person,
+  type WalletApp,
+} from "@/lib/store-roster";
 
 const newId = customAlphabet(
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
@@ -38,8 +44,6 @@ export async function listPeopleAction(): Promise<Person[]> {
 
 export async function upsertPersonAction(input: unknown): Promise<Person> {
   const data = personSchema.parse(input);
-  const roster = await getRoster();
-  // Dedupe + filter walletApps to known values
   const walletApps = Array.from(new Set(data.walletApps)).filter((a): a is WalletApp =>
     WALLET_APPS.some((w) => w.id === a),
   );
@@ -54,19 +58,21 @@ export async function upsertPersonAction(input: unknown): Promise<Person> {
     accountTitle: data.accountTitle ?? null,
     acceptsCash: data.acceptsCash,
   };
-  if (data.id) {
-    const idx = roster.findIndex((p) => p.id === data.id);
-    if (idx === -1) throw new Error("Person not found");
-    roster[idx] = next;
-  } else {
-    roster.push(next);
-  }
-  await putRoster(roster);
+
+  await updateRoster((roster) => {
+    if (data.id) {
+      const idx = roster.findIndex((p) => p.id === data.id);
+      if (idx === -1) throw new Error("Person not found");
+      roster[idx] = next;
+    } else {
+      roster.push(next);
+    }
+    return roster;
+  });
+
   return next;
 }
 
 export async function removePersonAction(id: string): Promise<void> {
-  const roster = await getRoster();
-  const updated = roster.filter((p) => p.id !== id);
-  await putRoster(updated);
+  await updateRoster((roster) => roster.filter((p) => p.id !== id));
 }

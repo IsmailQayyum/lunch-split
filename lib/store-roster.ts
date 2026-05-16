@@ -1,4 +1,5 @@
-import { put, list } from "@vercel/blob";
+import "server-only";
+import { redis, CAS_LUA, casBackoff, CAS_MAX_ATTEMPTS } from "./redis";
 
 export type WalletApp = "jazzcash" | "easypaisa" | "nayapay" | "sadapay";
 
@@ -23,7 +24,7 @@ export type Person = {
   acceptsCash: boolean;
 };
 
-const PATH = "roster.json";
+const KEY = "roster";
 
 // Migrate old shape (separate jazzcash/easypaisa fields) to new shape.
 function normalize(raw: unknown): Person | null {
@@ -31,7 +32,6 @@ function normalize(raw: unknown): Person | null {
   const o = raw as Record<string, unknown>;
   if (typeof o.id !== "string" || typeof o.name !== "string") return null;
 
-  // New fields, if present
   let walletNumber = typeof o.walletNumber === "string" ? o.walletNumber : null;
   let walletApps = Array.isArray(o.walletApps)
     ? (o.walletApps.filter((a): a is WalletApp =>
@@ -64,14 +64,10 @@ function normalize(raw: unknown): Person | null {
 }
 
 export async function getRoster(): Promise<Person[]> {
+  const raw = await redis.get<string>(KEY);
+  if (!raw) return [];
   try {
-    const { blobs } = await list({ prefix: PATH });
-    const exact = blobs.find((b) => b.pathname === PATH);
-    if (!exact) return [];
-    const bustUrl = `${exact.url}?t=${Date.now()}`;
-    const res = await fetch(bustUrl, { cache: "no-store" });
-    if (!res.ok) return [];
-    const arr = await res.json();
+    const arr = JSON.parse(raw);
     if (!Array.isArray(arr)) return [];
     return arr.map(normalize).filter((p): p is Person => !!p);
   } catch {
@@ -80,13 +76,39 @@ export async function getRoster(): Promise<Person[]> {
 }
 
 export async function putRoster(roster: Person[]): Promise<void> {
-  await put(PATH, JSON.stringify(roster), {
-    access: "public",
-    contentType: "application/json",
-    allowOverwrite: true,
-    addRandomSuffix: false,
-    cacheControlMaxAge: 0,
-  });
+  await redis.set(KEY, JSON.stringify(roster));
+}
+
+// Atomic CAS-based mutator. Prefer this over the read/putRoster pattern in
+// action handlers — eliminates race conditions when two edits land at once.
+export async function updateRoster(
+  mutator: (r: Person[]) => Person[] | Promise<Person[]>,
+): Promise<Person[]> {
+  for (let attempt = 0; attempt < CAS_MAX_ATTEMPTS; attempt++) {
+    const currentRaw = (await redis.get<string>(KEY)) ?? "";
+    let currentArr: Person[];
+    try {
+      currentArr = currentRaw ? JSON.parse(currentRaw) : [];
+      if (!Array.isArray(currentArr)) currentArr = [];
+      else currentArr = currentArr.map(normalize).filter((p): p is Person => !!p);
+    } catch {
+      currentArr = [];
+    }
+
+    const next = await mutator(currentArr);
+    const nextStr = JSON.stringify(next);
+
+    if (currentRaw === "") {
+      const ok = await redis.set(KEY, nextStr, { nx: true });
+      if (ok !== null) return next;
+    } else {
+      const result = (await redis.eval(CAS_LUA, [KEY], [currentRaw, nextStr])) as string;
+      if (result === nextStr) return next;
+    }
+
+    await casBackoff();
+  }
+  throw new Error("updateRoster failed after retries");
 }
 
 export function findPersonByEmail(roster: Person[], email: string | null | undefined) {
