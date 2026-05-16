@@ -1,4 +1,4 @@
-import { put, list } from "@vercel/blob";
+import { put, head } from "@vercel/blob";
 import type { Ticket } from "./types";
 import { upsertIndexEntry, toIndexEntry } from "./tickets-index";
 
@@ -10,11 +10,23 @@ function pathFor(slug: string) {
 
 export async function getTicket(slug: string): Promise<Ticket | null> {
   const path = pathFor(slug);
-  const { blobs } = await list({ prefix: path });
-  const exact = blobs.find((b) => b.pathname === path);
-  if (!exact) return null;
-  // Cache-bust to force a fresh fetch (CDN can serve stale after overwrites).
-  const bustUrl = `${exact.url}?t=${Date.now()}`;
+  let url: string;
+  let stamp: number;
+  try {
+    // head() hits Vercel Blob's metadata API directly — not the CDN — so
+    // it's guaranteed fresh after a put().
+    const meta = await head(path);
+    url = meta.url;
+    stamp = meta.uploadedAt.getTime();
+  } catch {
+    // BlobNotFoundError (or transient failure) -> treat as missing
+    return null;
+  }
+  // Use uploadedAt as cache-bust: it changes on every overwrite, so each
+  // version gets a deterministically-unique URL the CDN hasn't seen.
+  // Date.now()-based busting was not reliable — the CDN appeared to serve
+  // stale content under the same path despite the changing query string.
+  const bustUrl = `${url}?v=${stamp}`;
   const res = await fetch(bustUrl, { cache: "no-store" });
   if (!res.ok) return null;
   return (await res.json()) as Ticket;
