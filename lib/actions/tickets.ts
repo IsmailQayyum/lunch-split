@@ -8,16 +8,13 @@ import { z } from "zod";
 import { newSlug } from "@/lib/slug";
 import { splitEvenly } from "@/lib/shares";
 import { sendReminderEmail } from "@/lib/email";
+import { notifySlack, ticketUrl } from "@/lib/slack-notify";
 import { getTicket, putTicket, updateTicket } from "@/lib/store";
 import type { Participant, Ticket, ParticipantStatus } from "@/lib/types";
-import {
-  notifyMarkPaid,
-  notifyConfirmed,
-  notifyMarkCash,
-  notifyTicketClosed,
-  notifyTicketReopened,
-  notifyTicketCreated,
-} from "@/lib/slack-notify";
+
+function settledOf(t: Ticket): number {
+  return t.participants.filter((p) => p.status === "confirmed" || p.status === "cash").length;
+}
 
 const newParticipantId = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 12);
 
@@ -95,7 +92,9 @@ export async function createTicketAction(input: unknown) {
   };
 
   await putTicket(ticket);
-  notifyTicketCreated(ticket).catch(() => {});
+  await notifySlack(
+    `🍱 New ticket: *${ticket.title}* · ₨ ${ticket.totalAmount.toLocaleString("en-PK")} by ${ticket.payer.name}\n${ticketUrl(slug)}`,
+  );
   redirect(`/t/${slug}?created=1`);
 }
 
@@ -119,8 +118,10 @@ async function mutateParticipant(
   participantId: string,
   fn: (p: Participant) => Participant,
   autoClose = true,
-) {
-  await updateTicket(slug, (t) => {
+): Promise<{ before: Ticket; after: Ticket; participant: Participant }> {
+  let before!: Ticket;
+  const after = await updateTicket(slug, (t) => {
+    before = t;
     const updated = {
       ...t,
       participants: t.participants.map((p) => (p.id === participantId ? fn(p) : p)),
@@ -128,46 +129,63 @@ async function mutateParticipant(
     return autoClose ? autoCloseIfDone(updated) : updated;
   });
   revalidatePath(`/t/${slug}`);
+  const participant = after.participants.find((x) => x.id === participantId)!;
+  return { before, after, participant };
+}
+
+async function notifyAutoCloseIfFlipped(before: Ticket, after: Ticket) {
+  if (before.status === "open" && after.status === "closed") {
+    await notifySlack(
+      `🟢 *${after.title}* — everyone settled.\n${ticketUrl(after.slug)}`,
+    );
+  }
 }
 
 export async function markPaidAction(slug: string, participantId: string) {
-  await mutateParticipant(slug, participantId, (p) => {
-    if (p.status === "confirmed" || p.status === "cash") return p;
-    return { ...p, status: "self_marked", selfMarkedAt: new Date().toISOString() };
-  }, false);
-  // Fire-and-forget Slack notification
-  getTicket(slug).then((t) => {
-    if (!t) return;
-    const p = t.participants.find((x) => x.id === participantId);
-    if (p) notifyMarkPaid(t, p);
-  }).catch(() => {});
+  const { before, after, participant } = await mutateParticipant(
+    slug,
+    participantId,
+    (p) => {
+      if (p.status === "confirmed" || p.status === "cash") return p;
+      return { ...p, status: "self_marked", selfMarkedAt: new Date().toISOString() };
+    },
+    false,
+  );
+  const beforeP = before.participants.find((x) => x.id === participantId);
+  if (beforeP && beforeP.status !== participant.status) {
+    await notifySlack(
+      `· ${participant.name} marked paid on *${after.title}* — pending payer confirmation`,
+    );
+  }
 }
 
 export async function confirmPaidAction(slug: string, participantId: string) {
-  await mutateParticipant(slug, participantId, (p) => {
+  const { before, after, participant } = await mutateParticipant(slug, participantId, (p) => {
     if (p.status === "confirmed" || p.status === "cash") return p;
     return { ...p, status: "confirmed", confirmedAt: new Date().toISOString() };
   });
-  getTicket(slug).then((t) => {
-    if (!t) return;
-    const p = t.participants.find((x) => x.id === participantId);
-    if (p) notifyConfirmed(t, p);
-    if (t.status === "closed") notifyTicketClosed(t);
-  }).catch(() => {});
+  const beforeP = before.participants.find((x) => x.id === participantId);
+  if (beforeP && beforeP.status !== participant.status) {
+    await notifySlack(
+      `✓ ${participant.name} settled on *${after.title}* — ${settledOf(after)}/${after.participants.length} done`,
+    );
+  }
+  await notifyAutoCloseIfFlipped(before, after);
 }
 
 export async function markCashAction(slug: string, participantId: string) {
-  await mutateParticipant(slug, participantId, (p) => ({
+  const { before, after, participant } = await mutateParticipant(slug, participantId, (p) => ({
     ...p,
     status: "cash",
     confirmedAt: new Date().toISOString(),
   }));
-  getTicket(slug).then((t) => {
-    if (!t) return;
-    const p = t.participants.find((x) => x.id === participantId);
-    if (p) notifyMarkCash(t, p);
-    if (t.status === "closed") notifyTicketClosed(t);
-  }).catch(() => {});
+  const beforeP = before.participants.find((x) => x.id === participantId);
+  if (beforeP && beforeP.status !== "cash") {
+    await notifySlack(
+      `💵 ${participant.name} paid cash on *${after.title}* — ${settledOf(after)}/${after.participants.length} done`,
+    );
+  }
+  await notifyAutoCloseIfFlipped(before, after);
 }
 
 export async function reopenParticipantAction(slug: string, participantId: string) {
@@ -231,19 +249,31 @@ export async function logWhatsappReminderAction(slug: string, participantId: str
 }
 
 export async function closeTicketAction(slug: string) {
-  await updateTicket(slug, (t) => ({ ...t, status: "closed", closedAt: new Date().toISOString() }));
+  let wasOpen = false;
+  const after = await updateTicket(slug, (t) => {
+    wasOpen = t.status === "open";
+    return { ...t, status: "closed", closedAt: new Date().toISOString() };
+  });
   revalidatePath(`/t/${slug}`);
-  getTicket(slug).then((t) => {
-    if (t) notifyTicketClosed(t);
-  }).catch(() => {});
+  if (wasOpen) {
+    await notifySlack(
+      `· *${after.title}* closed by ${after.payer.name}.\n${ticketUrl(after.slug)}`,
+    );
+  }
 }
 
 export async function reopenTicketAction(slug: string) {
-  await updateTicket(slug, (t) => ({ ...t, status: "open", closedAt: null }));
+  let wasClosed = false;
+  const after = await updateTicket(slug, (t) => {
+    wasClosed = t.status === "closed";
+    return { ...t, status: "open", closedAt: null };
+  });
   revalidatePath(`/t/${slug}`);
-  getTicket(slug).then((t) => {
-    if (t) notifyTicketReopened(t);
-  }).catch(() => {});
+  if (wasClosed) {
+    await notifySlack(
+      `⚠ *${after.title}* reopened by ${after.payer.name}.\n${ticketUrl(after.slug)}`,
+    );
+  }
 }
 
 export async function updateParticipantAmountAction(
