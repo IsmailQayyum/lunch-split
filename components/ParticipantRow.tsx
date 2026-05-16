@@ -1,6 +1,6 @@
 "use client";
 
-import { useOptimistic, useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { Button } from "./ui/button";
 import { normalizeWhatsapp, whatsappUrl, reminderText } from "@/lib/whatsapp";
 import {
@@ -57,22 +57,31 @@ export function ParticipantRow({
   const [menuOpen, setMenuOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
 
-  // Optimistic status: updates the visible status instantly on click,
-  // syncs to the real value after the server action + revalidatePath.
-  const [optimisticStatus, setOptimisticStatus] = useOptimistic(participant.status);
+  // Sticky local override: updates the visible status instantly on click and
+  // holds it until the prop catches up. Avoids the useOptimistic flicker where
+  // the optimistic state drops the moment the server action returns but the
+  // Blob-backed re-render can still serve stale data for a few seconds.
+  const [localStatus, setLocalStatus] = useState<Status | null>(null);
 
-  const status = optimisticStatus;
+  useEffect(() => {
+    if (localStatus !== null && participant.status === localStatus) {
+      setLocalStatus(null);
+    }
+  }, [participant.status, localStatus]);
+
+  const status = localStatus ?? participant.status;
   const settled = status === "confirmed" || status === "cash";
   const waNumber = normalizeWhatsapp(participant.whatsapp);
 
   function run(opt: Status | null, fn: () => Promise<unknown>) {
     setErr(null);
+    if (opt) setLocalStatus(opt);
     startTransition(async () => {
-      if (opt) setOptimisticStatus(opt);
       try {
         await fn();
       } catch (e) {
         setErr((e as Error).message);
+        if (opt) setLocalStatus(null);
       }
     });
   }
