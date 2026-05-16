@@ -58,7 +58,10 @@ export default async function OGImage({ params }: { params: { slug: string } }) 
   const SAFFRON = "#b8401f";
   const MOSS = "#3e6131";
 
-  const visible = ticket.participants.slice(0, 6);
+  // Cap visible rows so the list never overlaps the totals/footer block.
+  // 1200x630 leaves room for ~4 rows after the header/title/meta/rule above,
+  // plus the totals + footer band below.
+  const visible = ticket.participants.slice(0, 4);
   const overflow = ticket.participants.length - visible.length;
 
   return new ImageResponse(
@@ -149,7 +152,7 @@ export default async function OGImage({ params }: { params: { slug: string } }) 
           />
 
           {/* Itemized */}
-          <div style={{ display: "flex", flexDirection: "column", gap: 10, flex: 1 }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8, flex: 1 }}>
             {visible.map((p) => {
               const isPaid = p.status === "confirmed" || p.status === "cash";
               return (
@@ -159,17 +162,17 @@ export default async function OGImage({ params }: { params: { slug: string } }) 
                     display: "flex",
                     justifyContent: "space-between",
                     alignItems: "baseline",
-                    fontSize: 26,
+                    fontSize: 22,
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
+                  <div style={{ display: "flex", alignItems: "baseline", gap: 12 }}>
                     <span style={{ fontStyle: "italic" }}>{p.name}</span>
                     <span
                       style={{
                         fontFamily: "monospace",
-                        fontSize: 13,
+                        fontSize: 12,
                         letterSpacing: 2,
-                        padding: "2px 8px",
+                        padding: "2px 7px",
                         border: `1.5px solid ${isPaid ? MOSS : SAFFRON}`,
                         color: isPaid ? MOSS : SAFFRON,
                         fontWeight: 700,
@@ -178,7 +181,7 @@ export default async function OGImage({ params }: { params: { slug: string } }) 
                       {isPaid ? "PAID" : "PENDING"}
                     </span>
                   </div>
-                  <span style={{ fontFamily: "monospace", fontSize: 28 }}>
+                  <span style={{ fontFamily: "monospace", fontSize: 24 }}>
                     ₨ {p.amountOwed.toLocaleString("en-PK")}
                   </span>
                 </div>
@@ -188,10 +191,10 @@ export default async function OGImage({ params }: { params: { slug: string } }) 
               <div
                 style={{
                   display: "flex",
-                  fontSize: 18,
+                  fontSize: 17,
                   color: INK_FAINT,
                   fontStyle: "italic",
-                  marginTop: 4,
+                  marginTop: 2,
                 }}
               >
                 + {overflow} more on the receipt
