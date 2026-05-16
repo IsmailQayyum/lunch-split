@@ -15,6 +15,65 @@ import {
 
 type Status = "pending" | "self_marked" | "confirmed" | "cash";
 
+// Hold the optimistic status for this long after the click. Vercel Blob's
+// CDN is eventually-consistent — a read in the first ~10s after a write can
+// return the pre-write content. 30s is a comfortable safety floor and well
+// past the observed window.
+const STICKY_HOLD_MS = 30_000;
+
+const stickyKey = (slug: string, pid: string) => `lp:row:${slug}:${pid}`;
+
+function readSticky(slug: string, pid: string): Status | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(stickyKey(slug, pid));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { status?: unknown; at?: unknown };
+    if (typeof parsed.status !== "string" || typeof parsed.at !== "number") return null;
+    if (Date.now() - parsed.at >= STICKY_HOLD_MS) {
+      window.localStorage.removeItem(stickyKey(slug, pid));
+      return null;
+    }
+    return parsed.status as Status;
+  } catch {
+    return null;
+  }
+}
+
+function writeSticky(slug: string, pid: string, status: Status) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      stickyKey(slug, pid),
+      JSON.stringify({ status, at: Date.now() }),
+    );
+  } catch {
+    /* quota or disabled — silently ignore */
+  }
+}
+
+function clearSticky(slug: string, pid: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(stickyKey(slug, pid));
+  } catch {
+    /* ignore */
+  }
+}
+
+function stickyRemainingMs(slug: string, pid: string): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = window.localStorage.getItem(stickyKey(slug, pid));
+    if (!raw) return 0;
+    const parsed = JSON.parse(raw) as { at?: unknown };
+    if (typeof parsed.at !== "number") return 0;
+    return Math.max(0, STICKY_HOLD_MS - (Date.now() - parsed.at));
+  } catch {
+    return 0;
+  }
+}
+
 type Props = {
   slug: string;
   ticketUrl: string;
@@ -57,19 +116,36 @@ export function ParticipantRow({
   const [menuOpen, setMenuOpen] = useState(false);
   const [hidden, setHidden] = useState(false);
 
-  // Sticky local override: updates the visible status instantly on click and
-  // holds it for a fixed time window after the click. Avoids the flicker that
-  // happens when Vercel Blob's CDN briefly serves stale data: the prop can
-  // appear fresh → revert to stale → become fresh again over ~10 seconds.
-  // Clearing on first prop match would cause a visible revert in the middle.
-  // 15 seconds is well past the observed consistency window.
+  // Sticky local override, persisted to localStorage so it survives a page
+  // refresh during the blob CDN's eventual-consistency window. Held for
+  // STICKY_HOLD_MS measured from the click time stored alongside the value
+  // — so navigating away and back doesn't reset the clock.
   const [localStatus, setLocalStatus] = useState<Status | null>(null);
 
+  // Hydrate from localStorage on mount. Initialized to null on render so SSR
+  // and first client render match; the override snaps in just after hydration.
+  useEffect(() => {
+    const stored = readSticky(slug, participant.id);
+    if (stored) setLocalStatus(stored);
+  }, [slug, participant.id]);
+
+  // Schedule the cleanup based on remaining time in the hold window. Re-runs
+  // whenever the local status changes (e.g., user does another action), so a
+  // fresh click extends the hold.
   useEffect(() => {
     if (localStatus === null) return;
-    const t = setTimeout(() => setLocalStatus(null), 15000);
+    const remaining = stickyRemainingMs(slug, participant.id);
+    if (remaining === 0) {
+      setLocalStatus(null);
+      clearSticky(slug, participant.id);
+      return;
+    }
+    const t = setTimeout(() => {
+      setLocalStatus(null);
+      clearSticky(slug, participant.id);
+    }, remaining);
     return () => clearTimeout(t);
-  }, [localStatus]);
+  }, [localStatus, slug, participant.id]);
 
   const status = localStatus ?? participant.status;
   const settled = status === "confirmed" || status === "cash";
@@ -77,13 +153,19 @@ export function ParticipantRow({
 
   function run(opt: Status | null, fn: () => Promise<unknown>) {
     setErr(null);
-    if (opt) setLocalStatus(opt);
+    if (opt) {
+      setLocalStatus(opt);
+      writeSticky(slug, participant.id, opt);
+    }
     startTransition(async () => {
       try {
         await fn();
       } catch (e) {
         setErr((e as Error).message);
-        if (opt) setLocalStatus(null);
+        if (opt) {
+          setLocalStatus(null);
+          clearSticky(slug, participant.id);
+        }
       }
     });
   }
