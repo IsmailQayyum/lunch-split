@@ -61,7 +61,7 @@ export default async function Home() {
       <footer className="mt-16 text-center space-y-3">
         <div className="divider-double max-w-[180px] mx-auto" />
         <div className="eyebrow">
-          NO ACCOUNTS · <span className="text-saffron">NO SIGN-IN</span> · BUILT FOR THE CREW
+          ACCOUNTS · <span className="text-saffron">YOURS ALONE</span> · BUILT FOR THE CREW
         </div>
         <div className="barcode max-w-[160px] mx-auto mt-4" />
         <div className="eyebrow mt-1">PRINTED · {nowStamp()}</div>
