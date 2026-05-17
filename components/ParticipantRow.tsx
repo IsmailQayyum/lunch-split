@@ -90,6 +90,8 @@ type Props = {
   ticketOpen: boolean;
   currency: string;
   lastRemindedAt: Date | null;
+  viewerEmail: string | null;
+  isPayer: boolean;
 };
 
 function relTime(d: Date | null) {
@@ -110,6 +112,8 @@ export function ParticipantRow({
   ticketOpen,
   currency,
   lastRemindedAt,
+  viewerEmail,
+  isPayer,
 }: Props) {
   const [pending, startTransition] = useTransition();
   const [err, setErr] = useState<string | null>(null);
@@ -150,6 +154,11 @@ export function ParticipantRow({
   const status = localStatus ?? participant.status;
   const settled = status === "confirmed" || status === "cash";
   const waNumber = normalizeWhatsapp(participant.whatsapp);
+
+  const isMyRow =
+    !!viewerEmail && !!participant.email && viewerEmail === participant.email.toLowerCase();
+  const canSelfMark = isMyRow;
+  const canPayerAct = isPayer;
 
   function run(opt: Status | null, fn: () => Promise<unknown>) {
     setErr(null);
@@ -221,82 +230,96 @@ export function ParticipantRow({
 
       {err && <div className="text-[11px] text-saffron mt-1">{err}</div>}
 
-      {!settled && ticketOpen && (
+      {!settled && ticketOpen && (canSelfMark || canPayerAct) && (
         <div className="flex flex-wrap items-center gap-2 mt-3 pl-0.5">
-          <Button
-            size="sm"
-            onClick={() => run("self_marked", () => markPaidAction(slug, participant.id))}
-            disabled={pending || status === "self_marked"}
-          >
-            {status === "self_marked" ? "Sent" : "I paid"}
-          </Button>
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() => run("confirmed", () => confirmPaidAction(slug, participant.id))}
-            disabled={pending}
-          >
-            Confirm
-          </Button>
-
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setMenuOpen((v) => !v)}
-              className="btn btn-ghost btn-sm"
-              aria-label="More"
+          {canSelfMark && (
+            <Button
+              size="sm"
+              onClick={() => run("self_marked", () => markPaidAction(slug, participant.id))}
+              disabled={pending || status === "self_marked"}
             >
-              ⋯
-            </button>
-            {menuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-56 bg-paper-light border border-ink z-10 text-[11px] uppercase tracking-wider shadow-lg">
-                <MenuItem
-                  disabled={!waNumber}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    openWhatsapp();
-                  }}
-                >
-                  {waNumber ? "Nudge on WhatsApp" : "No WhatsApp on file"}
-                </MenuItem>
-                <MenuItem
-                  disabled={!participant.email}
-                  onClick={() => {
-                    setMenuOpen(false);
-                    run(null, () => remindEmailAction(slug, participant.id));
-                  }}
-                >
-                  {participant.email ? "Email reminder" : "No email on file"}
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    setMenuOpen(false);
-                    run("cash", () => markCashAction(slug, participant.id));
-                  }}
-                >
-                  Paid in cash
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    setMenuOpen(false);
-                    setHidden(true);
-                    run(null, () => removeParticipantAction(slug, participant.id));
-                  }}
-                >
-                  Remove entry
-                </MenuItem>
-                {lastRemindedAt && (
-                  <div className="px-3 py-2 text-[10px] text-ink-faint normal-case tracking-normal border-t border-ink-faint/30">
-                    last nudged {relTime(lastRemindedAt)}{recentlyReminded ? " (recent)" : ""}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+              {status === "self_marked" ? "Sent" : "I paid"}
+            </Button>
+          )}
+          {canPayerAct && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => run("confirmed", () => confirmPaidAction(slug, participant.id))}
+              disabled={pending}
+            >
+              Confirm
+            </Button>
+          )}
+
+          {(canPayerAct || canSelfMark) && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setMenuOpen((v) => !v)}
+                className="btn btn-ghost btn-sm"
+                aria-label="More"
+              >
+                ⋯
+              </button>
+              {menuOpen && (
+                <div className="absolute right-0 top-full mt-1 w-56 bg-paper-light border border-ink z-10 text-[11px] uppercase tracking-wider shadow-lg">
+                  {canPayerAct && (
+                    <MenuItem
+                      disabled={!waNumber}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        openWhatsapp();
+                      }}
+                    >
+                      {waNumber ? "Nudge on WhatsApp" : "No WhatsApp on file"}
+                    </MenuItem>
+                  )}
+                  {canPayerAct && (
+                    <MenuItem
+                      disabled={!participant.email}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        run(null, () => remindEmailAction(slug, participant.id));
+                      }}
+                    >
+                      {participant.email ? "Email reminder" : "No email on file"}
+                    </MenuItem>
+                  )}
+                  {canPayerAct && (
+                    <MenuItem
+                      onClick={() => {
+                        setMenuOpen(false);
+                        run("cash", () => markCashAction(slug, participant.id));
+                      }}
+                    >
+                      Paid in cash
+                    </MenuItem>
+                  )}
+                  {(canPayerAct || canSelfMark) && (
+                    <MenuItem
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setHidden(true);
+                        run(null, () => removeParticipantAction(slug, participant.id));
+                      }}
+                    >
+                      Remove entry
+                    </MenuItem>
+                  )}
+                  {canPayerAct && lastRemindedAt && (
+                    <div className="px-3 py-2 text-[10px] text-ink-faint normal-case tracking-normal border-t border-ink-faint/30">
+                      last nudged {relTime(lastRemindedAt)}{recentlyReminded ? " (recent)" : ""}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
-      {settled && ticketOpen && (
+      {settled && ticketOpen && (canSelfMark || canPayerAct) && (
         <div className="mt-2">
           <button
             type="button"
