@@ -9,7 +9,7 @@ import { newSlug } from "@/lib/slug";
 import { splitEvenly } from "@/lib/shares";
 import { sendReminderEmail } from "@/lib/email";
 import { notifySlack, ticketUrl } from "@/lib/slack-notify";
-import { getTicket, putTicket, updateTicket } from "@/lib/store";
+import { getTicket, putTicket, updateTicket, deleteTicket } from "@/lib/store";
 import type { Participant, Ticket, ParticipantStatus } from "@/lib/types";
 
 function settledOf(t: Ticket): number {
@@ -260,6 +260,12 @@ export async function closeTicketAction(slug: string) {
       `🔒 *${after.title}* closed by *${after.payer.name}*\n${settledOf(after)}/${after.participants.length} settled at close\n${ticketUrl(after.slug)}`,
     );
   }
+}
+
+export async function deleteTicketAction(slug: string) {
+  await deleteTicket(slug);
+  revalidatePath("/");
+  redirect("/");
 }
 
 export async function reopenTicketAction(slug: string) {

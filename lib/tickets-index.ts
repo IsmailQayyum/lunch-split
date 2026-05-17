@@ -104,6 +104,27 @@ export async function upsertIndexEntry(entry: IndexEntry): Promise<void> {
   throw new Error("upsertIndexEntry failed after retries");
 }
 
+export async function removeIndexEntry(slug: string): Promise<void> {
+  for (let attempt = 0; attempt < CAS_MAX_ATTEMPTS; attempt++) {
+    const currentRaw = (await redis.get<string>(KEY)) ?? "";
+    if (!currentRaw) return;
+    let currentArr: IndexEntry[];
+    try {
+      currentArr = JSON.parse(currentRaw);
+      if (!Array.isArray(currentArr)) return;
+    } catch {
+      return;
+    }
+    const filtered = currentArr.filter((e) => e.slug !== slug);
+    if (filtered.length === currentArr.length) return; // wasn't in the index
+    const nextStr = JSON.stringify(filtered);
+    const result = (await redis.eval(CAS_LUA, [KEY], [currentRaw, nextStr])) as string;
+    if (result === nextStr) return;
+    await casBackoff();
+  }
+  throw new Error("removeIndexEntry failed after retries");
+}
+
 // The blob-era rebuild fallback (scan all ticket blobs to reconstruct the
 // index) is no longer needed — Redis preserves the index reliably. Keep
 // the function name so callers (e.g., the home page) don't break.

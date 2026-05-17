@@ -1,9 +1,18 @@
 import "server-only";
 import type { Ticket } from "./types";
-import { upsertIndexEntry, toIndexEntry } from "./tickets-index";
+import { upsertIndexEntry, removeIndexEntry, toIndexEntry } from "./tickets-index";
 import { redis, CAS_LUA, casBackoff, CAS_MAX_ATTEMPTS } from "./redis";
 
 const keyTicket = (slug: string) => `ticket:${slug}`;
+
+export async function deleteTicket(slug: string): Promise<void> {
+  await redis.del(keyTicket(slug));
+  try {
+    await removeIndexEntry(slug);
+  } catch (e) {
+    console.error("Tickets index removal failed:", e);
+  }
+}
 
 export async function getTicket(slug: string): Promise<Ticket | null> {
   const raw = await redis.get<string>(keyTicket(slug));
