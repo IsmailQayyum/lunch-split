@@ -57,6 +57,7 @@ export async function upsertPersonAction(input: unknown): Promise<Person> {
     iban: data.iban ?? null,
     accountTitle: data.accountTitle ?? null,
     acceptsCash: data.acceptsCash,
+    hasAccount: false,
   };
 
   await updateRoster((roster) => {

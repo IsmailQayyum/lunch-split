@@ -21,6 +21,7 @@ export type Person = {
   iban: string | null;
   accountTitle: string | null;
   acceptsCash: boolean;
+  hasAccount: boolean;
 };
 
 export function findPersonByEmail(roster: Person[], email: string | null | undefined) {

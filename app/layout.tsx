@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Fraunces, JetBrains_Mono } from "next/font/google";
 import "./globals.css";
+import { SessionBar } from "@/components/SessionBar";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -23,7 +24,10 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${fraunces.variable} ${mono.variable}`}>
-      <body className="antialiased min-h-screen">{children}</body>
+      <body className="antialiased min-h-screen">
+        <SessionBar />
+        {children}
+      </body>
     </html>
   );
 }
