@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { NewTicketForm } from "./NewTicketForm";
-import { getRoster } from "@/lib/store-roster";
+import { getRoster, claimAccountByEmail } from "@/lib/store-roster";
+import { requireViewer } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -9,6 +10,10 @@ export default async function NewTicketPage({
 }: {
   searchParams: Promise<{ title?: string; total?: string; from?: string }>;
 }) {
+  const viewer = await requireViewer("/tickets/new");
+  // Ensure the viewer has a Person row (covers the case where login created
+  // an entry but the user later removed it).
+  const me = viewer.person ?? (await claimAccountByEmail(viewer.email));
   const roster = await getRoster();
   const sp = await searchParams;
   const fromSlack = sp.from === "slack";
@@ -31,13 +36,14 @@ export default async function NewTicketPage({
         </h1>
         <p className="text-ink-soft text-[14px] mt-3 max-w-[420px] mx-auto">
           {fromSlack
-            ? "Title and total already filled in from Slack. Just pick yourself + the crew."
+            ? "Title and total already filled in from Slack. Just pick the crew."
             : "Fill it once, share once — the rest settle up on their own."}
         </p>
       </header>
       <div className="divider-dots mb-8" />
       <NewTicketForm
         roster={roster}
+        payer={me}
         initialTitle={sp.title ?? ""}
         initialTotal={sp.total ?? ""}
       />
