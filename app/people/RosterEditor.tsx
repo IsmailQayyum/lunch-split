@@ -62,9 +62,17 @@ function mergeBySSR(ssr: Person[], cached: Person[]): Person[] {
   return Array.from(map.values());
 }
 
-export function RosterEditor({ initial }: { initial: Person[] }) {
+type EditingId = string | "new" | "new-self" | null;
+
+export function RosterEditor({
+  initial,
+  viewerEmail,
+}: {
+  initial: Person[];
+  viewerEmail: string | null;
+}) {
   const [roster, setRoster] = useState(initial);
-  const [editingId, setEditingId] = useState<string | "new" | null>(null);
+  const [editingId, setEditingId] = useState<EditingId>(null);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [err, setErr] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
@@ -80,9 +88,19 @@ export function RosterEditor({ initial }: { initial: Person[] }) {
     writeCache(next);
   }
 
+  const myCard = viewerEmail
+    ? roster.find((p) => (p.email ?? "").toLowerCase() === viewerEmail) ?? null
+    : null;
+  const others = roster.filter((p) => p !== myCard);
+
   function startNew() {
     setEditingId("new");
     setForm(emptyForm);
+    setErr(null);
+  }
+  function startNewSelf() {
+    setEditingId("new-self");
+    setForm({ ...emptyForm, email: viewerEmail ?? "" });
     setErr(null);
   }
   function startEdit(p: Person) {
@@ -107,10 +125,11 @@ export function RosterEditor({ initial }: { initial: Person[] }) {
   function save() {
     setErr(null);
     if (!form.name.trim()) return setErr("Name required");
+    const creating = editingId === "new" || editingId === "new-self";
     startTransition(async () => {
       try {
         const person = await upsertPersonAction({
-          id: editingId === "new" ? undefined : editingId!,
+          id: creating ? undefined : editingId!,
           name: form.name.trim(),
           email: form.email.trim() || undefined,
           whatsapp: form.whatsapp.trim() || undefined,
@@ -139,6 +158,7 @@ export function RosterEditor({ initial }: { initial: Person[] }) {
       try {
         await removePersonAction(id);
         syncRoster(roster.filter((p) => p.id !== id));
+        setEditingId(null);
       } catch (e) {
         setErr((e as Error).message);
       }
@@ -146,71 +166,129 @@ export function RosterEditor({ initial }: { initial: Person[] }) {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="eyebrow">{roster.length} ON THE LIST</div>
-        {editingId !== "new" && (
-          <Button size="sm" onClick={startNew}>
-            + Add person
-          </Button>
-        )}
-      </div>
-
-      {editingId === "new" && (
-        <FormCard
-          title="NEW PERSON"
-          form={form}
-          setForm={setForm}
-          err={err}
-          pending={pending}
-          onSave={save}
-          onCancel={cancel}
-        />
-      )}
-
-      {roster.length === 0 && editingId !== "new" && (
-        <div className="text-center py-10 text-ink-soft italic text-[14px] border border-dashed border-ink-faint/50">
-          Empty roster. Add the regular lunch crew once.
+    <div className="space-y-10">
+      {!viewerEmail && (
+        <div className="border border-dashed border-saffron/50 p-4 text-center text-[13px] text-ink-soft italic">
+          Sign in to edit your card.{" "}
+          <a href="/login" className="ink-link">
+            Sign in →
+          </a>
         </div>
       )}
 
-      <div className="space-y-3">
-        {roster.map((p) =>
-          editingId === p.id ? (
+      {/* YOU */}
+      {viewerEmail && (
+        <section>
+          <div className="flex items-center justify-between mb-4">
+            <div className="eyebrow text-saffron">YOU</div>
+            {!myCard && editingId !== "new-self" && (
+              <Button size="sm" onClick={startNewSelf}>
+                Fill out your card
+              </Button>
+            )}
+          </div>
+          {editingId === "new-self" ? (
             <FormCard
-              key={p.id}
-              title={`EDIT · ${p.name.toUpperCase()}`}
+              title="YOUR CARD"
               form={form}
               setForm={setForm}
               err={err}
               pending={pending}
               onSave={save}
               onCancel={cancel}
-              onDelete={() => remove(p.id)}
             />
+          ) : myCard ? (
+            editingId === myCard.id ? (
+              <FormCard
+                title={`YOUR CARD · ${myCard.name.toUpperCase()}`}
+                form={form}
+                setForm={setForm}
+                err={err}
+                pending={pending}
+                onSave={save}
+                onCancel={cancel}
+                onDelete={() => remove(myCard.id)}
+              />
+            ) : (
+              <PersonLine person={myCard} editable onEdit={() => startEdit(myCard)} highlight />
+            )
           ) : (
-            <div key={p.id} className="line-item py-2 group">
-              <div className="min-w-0">
-                <div className="display-italic text-[22px] truncate">{p.name}</div>
-                <div className="text-[12px] text-ink-faint truncate mt-0.5">
-                  {[p.whatsapp, p.email].filter(Boolean).join(" · ") || "no contact"}
-                  {(p.walletNumber || p.iban) && (
-                    <span className="ml-2 text-moss">· receives payments</span>
-                  )}
-                </div>
-              </div>
-              <span className="leader" />
-              <button
-                type="button"
-                onClick={() => startEdit(p)}
-                className="eyebrow ink-link shrink-0"
-              >
-                EDIT
-              </button>
+            <div className="text-center text-[13px] text-ink-soft italic py-6 border border-dashed border-ink-faint/50">
+              No card yet for {viewerEmail}. Fill yours so others can pay you.
             </div>
-          ),
+          )}
+        </section>
+      )}
+
+      {/* THE CREW */}
+      <section>
+        <div className="flex items-center justify-between mb-4">
+          <div className="eyebrow">{others.length} ON THE CREW</div>
+          {viewerEmail && editingId !== "new" && (
+            <Button size="sm" variant="outline" onClick={startNew}>
+              + Add name
+            </Button>
+          )}
+        </div>
+
+        {editingId === "new" && (
+          <FormCard
+            title="NEW PERSON"
+            form={form}
+            setForm={setForm}
+            err={err}
+            pending={pending}
+            onSave={save}
+            onCancel={cancel}
+          />
         )}
+
+        {others.length === 0 && editingId !== "new" && (
+          <div className="text-center py-10 text-ink-soft italic text-[14px] border border-dashed border-ink-faint/50">
+            Empty roster. Add a name above.
+          </div>
+        )}
+
+        <div className="space-y-3">
+          {others.map((p) => (
+            <PersonLine key={p.id} person={p} />
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PersonLine({
+  person,
+  editable = false,
+  onEdit,
+  highlight = false,
+}: {
+  person: Person;
+  editable?: boolean;
+  onEdit?: () => void;
+  highlight?: boolean;
+}) {
+  return (
+    <div className={`line-item py-2 group ${highlight ? "border-l-2 border-saffron pl-2" : ""}`}>
+      <div className="min-w-0">
+        <div className="display-italic text-[22px] truncate">{person.name}</div>
+        <div className="text-[12px] text-ink-faint truncate mt-0.5">
+          {[person.whatsapp, person.email].filter(Boolean).join(" · ") || "no contact"}
+          {(person.walletNumber || person.iban) && (
+            <span className="ml-2 text-moss">· receives payments</span>
+          )}
+        </div>
       </div>
+      <span className="leader" />
+      {editable ? (
+        <button type="button" onClick={onEdit} className="eyebrow ink-link shrink-0">
+          EDIT
+        </button>
+      ) : (
+        <span className="eyebrow text-ink-faint shrink-0">VIEW ONLY</span>
+      )}
     </div>
   );
 }
