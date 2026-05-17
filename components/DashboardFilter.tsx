@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
 import Link from "next/link";
 import type { IndexEntry } from "@/lib/tickets-index";
+import { bulkDeleteTicketsAction } from "@/lib/actions/tickets";
 
 type Props = {
   entries: IndexEntry[];
@@ -29,10 +30,16 @@ export default function DashboardFilter({ entries }: Props) {
   const [query, setQuery] = useState("");
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
 
+  // Bulk-delete state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [password, setPassword] = useState("");
+  const [pwdError, setPwdError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
   const filtered = useMemo(() => {
     let results = entries;
 
-    // Text search
     const q = query.trim().toLowerCase();
     if (q) {
       results = results.filter((e) => {
@@ -47,7 +54,6 @@ export default function DashboardFilter({ entries }: Props) {
       });
     }
 
-    // Date filter
     if (datePreset !== "all") {
       const now = new Date();
       let cutoff: Date;
@@ -91,6 +97,54 @@ export default function DashboardFilter({ entries }: Props) {
 
   const hasFilters = query.trim() !== "" || datePreset !== "all";
 
+  function toggleSelect(slug: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelected(new Set());
+    setPassword("");
+    setPwdError(null);
+  }
+
+  function selectAllVisible() {
+    const all = new Set<string>();
+    for (const e of filtered) all.add(e.slug);
+    setSelected(all);
+  }
+
+  function runBulkDelete() {
+    setPwdError(null);
+    const slugs = Array.from(selected);
+    if (slugs.length === 0) return;
+    startTransition(async () => {
+      try {
+        const res = await bulkDeleteTicketsAction(slugs, password);
+        // Action revalidates / — the parent server component will re-render
+        // with the trimmed index. Reset our local state.
+        exitSelectMode();
+        if (res && typeof res.deleted === "number" && res.deleted < slugs.length) {
+          console.warn(
+            `Bulk delete partial: ${res.deleted}/${slugs.length} removed`,
+          );
+        }
+      } catch (e) {
+        const msg = (e as Error).message;
+        if (msg === "incorrect_password") {
+          setPwdError("Wrong password.");
+        } else {
+          setPwdError(msg || "Delete failed.");
+        }
+      }
+    });
+  }
+
   return (
     <>
       {/* Search + filters */}
@@ -115,7 +169,7 @@ export default function DashboardFilter({ entries }: Props) {
             </button>
           )}
         </div>
-        <div className="flex gap-2 flex-wrap">
+        <div className="flex gap-2 flex-wrap items-center">
           {(["all", "today", "week", "month"] as DatePreset[]).map((p) => (
             <button
               key={p}
@@ -135,6 +189,24 @@ export default function DashboardFilter({ entries }: Props) {
                     : "THIS MONTH"}
             </button>
           ))}
+          <span className="flex-1" />
+          {!selectMode ? (
+            <button
+              type="button"
+              onClick={() => setSelectMode(true)}
+              className="text-[10px] font-mono tracking-wider px-2.5 py-1 border border-saffron/50 text-saffron hover:border-saffron transition-colors"
+            >
+              ✕ DELETE BILLS
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={exitSelectMode}
+              className="text-[10px] font-mono tracking-wider px-2.5 py-1 border border-ink-faint/40 text-ink-faint hover:border-ink hover:text-ink transition-colors"
+            >
+              CANCEL
+            </button>
+          )}
         </div>
         {hasFilters && (
           <div className="text-[10px] font-mono tracking-wider text-ink-faint">
@@ -148,6 +220,29 @@ export default function DashboardFilter({ entries }: Props) {
                 className="ml-3 text-saffron hover:underline"
               >
                 RESET
+              </button>
+            )}
+          </div>
+        )}
+        {selectMode && (
+          <div className="text-[11px] font-mono tracking-wider text-saffron flex items-center gap-3 border-t border-dashed border-saffron/40 pt-3">
+            <span>
+              SELECT MODE · {selected.size} OF {filtered.length} TICKETS PICKED
+            </span>
+            <button
+              type="button"
+              onClick={selectAllVisible}
+              className="text-ink-faint hover:text-ink underline-offset-2 hover:underline"
+            >
+              SELECT ALL VISIBLE
+            </button>
+            {selected.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelected(new Set())}
+                className="text-ink-faint hover:text-ink underline-offset-2 hover:underline"
+              >
+                CLEAR
               </button>
             )}
           </div>
@@ -189,7 +284,15 @@ export default function DashboardFilter({ entries }: Props) {
         ) : (
           <ul className="space-y-1">
             {open.map((e, i) => (
-              <BucketLine key={e.slug} entry={e} kind="open" delayMs={i * 50} />
+              <BucketLine
+                key={e.slug}
+                entry={e}
+                kind="open"
+                delayMs={i * 50}
+                selectMode={selectMode}
+                selected={selected.has(e.slug)}
+                onToggle={toggleSelect}
+              />
             ))}
           </ul>
         )}
@@ -218,11 +321,78 @@ export default function DashboardFilter({ entries }: Props) {
                 entry={e}
                 kind="closed"
                 delayMs={i * 50}
+                selectMode={selectMode}
+                selected={selected.has(e.slug)}
+                onToggle={toggleSelect}
               />
             ))}
           </ul>
         )}
       </section>
+
+      {/* Bottom action bar — only when in select mode + something picked */}
+      {selectMode && selected.size > 0 && (
+        <div
+          className="
+            fixed bottom-0 left-0 right-0 z-50 bg-paper-light border-t-[1.5px] border-ink
+            shadow-[0_-8px_24px_rgba(21,17,11,0.15)]
+          "
+        >
+          <div className="max-w-[560px] mx-auto px-5 py-3 flex items-center gap-3 flex-wrap">
+            <div className="text-[12px] font-mono tracking-wider">
+              <span className="text-saffron">
+                DELETE {selected.size} BILL{selected.size !== 1 ? "S" : ""}
+              </span>
+              <span className="text-ink-faint ml-2">· enter password</span>
+            </div>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setPwdError(null);
+              }}
+              placeholder="• • • • • •"
+              className="
+                flex-1 min-w-[120px] bg-transparent border-b border-ink-faint
+                px-1 py-1 text-[14px] font-mono tracking-wider
+                focus:outline-none focus:border-saffron
+              "
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && password && !pending) runBulkDelete();
+              }}
+              disabled={pending}
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={runBulkDelete}
+              disabled={pending || !password}
+              className="
+                text-[11px] font-mono tracking-wider px-3 py-1.5
+                bg-saffron text-paper-light border border-saffron
+                hover:bg-paper-light hover:text-saffron transition-colors
+                disabled:opacity-40 disabled:cursor-not-allowed
+              "
+            >
+              {pending ? "DELETING…" : `✕ DELETE ${selected.size}`}
+            </button>
+            <button
+              type="button"
+              onClick={exitSelectMode}
+              disabled={pending}
+              className="text-[11px] font-mono tracking-wider text-ink-faint hover:text-ink"
+            >
+              CANCEL
+            </button>
+            {pwdError && (
+              <div className="w-full text-[11px] text-saffron font-mono tracking-wider">
+                {pwdError}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </>
   );
 }
@@ -231,10 +401,16 @@ function BucketLine({
   entry,
   kind,
   delayMs,
+  selectMode,
+  selected,
+  onToggle,
 }: {
   entry: IndexEntry;
   kind: "open" | "closed";
   delayMs: number;
+  selectMode: boolean;
+  selected: boolean;
+  onToggle: (slug: string) => void;
 }) {
   const settled = `${entry.settledCount}/${entry.participantCount}`;
   const pendingCount = entry.participantCount - entry.settledCount;
@@ -259,41 +435,76 @@ function BucketLine({
       <span>{fmtBillDate(entry.createdAt)}</span>
     );
 
+  const innerLine = (
+    <div
+      className={`line-item py-2.5 transition-colors ${
+        selectMode
+          ? selected
+            ? "text-saffron"
+            : ""
+          : "group-hover:text-saffron"
+      }`}
+    >
+      {selectMode && (
+        <span
+          className={`shrink-0 inline-flex items-center justify-center w-5 h-5 mr-2 border-[1.5px] ${
+            selected
+              ? "border-saffron bg-saffron text-paper-light"
+              : "border-ink-faint"
+          }`}
+          aria-hidden
+        >
+          {selected ? "✓" : ""}
+        </span>
+      )}
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="display-italic text-[20px] truncate">
+          {entry.title}
+        </span>
+        {kind === "open" && pendingCount > 0 && (
+          <span className="text-[10px] px-1.5 py-0.5 border border-saffron text-saffron font-mono tracking-wider">
+            {pendingCount} PENDING
+          </span>
+        )}
+        {kind === "closed" && (
+          <span className="text-[10px] text-moss font-mono tracking-wider">
+            ✓
+          </span>
+        )}
+      </div>
+      <span className="leader" />
+      <div className="text-right shrink-0">
+        <div className="display text-[18px] num">
+          ₨ {entry.totalAmount.toLocaleString("en-PK")}
+        </div>
+        <div className="text-[10px] text-ink-faint mt-0.5 font-mono tracking-wider">
+          {dateBlock} · {entry.payerName} · {settled}
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <li
-      className="relative group animate-fade-up hover:z-30"
+      className={`relative group animate-fade-up ${selectMode ? "" : "hover:z-30"}`}
       style={{ animationDelay: `${delayMs}ms` }}
     >
-      <Link href={`/t/${entry.slug}`} className="block">
-        <div className="line-item py-2.5 group-hover:text-saffron transition-colors">
-          <div className="flex items-center gap-2 min-w-0">
-            <span className="display-italic text-[20px] truncate">
-              {entry.title}
-            </span>
-            {kind === "open" && pendingCount > 0 && (
-              <span className="text-[10px] px-1.5 py-0.5 border border-saffron text-saffron font-mono tracking-wider">
-                {pendingCount} PENDING
-              </span>
-            )}
-            {kind === "closed" && (
-              <span className="text-[10px] text-moss font-mono tracking-wider">
-                ✓
-              </span>
-            )}
-          </div>
-          <span className="leader" />
-          <div className="text-right shrink-0">
-            <div className="display text-[18px] num">
-              ₨ {entry.totalAmount.toLocaleString("en-PK")}
-            </div>
-            <div className="text-[10px] text-ink-faint mt-0.5 font-mono tracking-wider">
-              {dateBlock} · {entry.payerName} · {settled}
-            </div>
-          </div>
-        </div>
-      </Link>
+      {selectMode ? (
+        <button
+          type="button"
+          onClick={() => onToggle(entry.slug)}
+          className="block w-full text-left"
+          aria-pressed={selected}
+        >
+          {innerLine}
+        </button>
+      ) : (
+        <Link href={`/t/${entry.slug}`} className="block">
+          {innerLine}
+        </Link>
+      )}
 
-      {entry.participants.length > 0 && (
+      {!selectMode && entry.participants.length > 0 && (
         <div
           className="
             absolute left-0 right-0 top-full mt-1 z-30

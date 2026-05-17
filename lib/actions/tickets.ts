@@ -268,6 +268,29 @@ export async function deleteTicketAction(slug: string) {
   redirect("/");
 }
 
+export async function bulkDeleteTicketsAction(slugs: string[], password: string) {
+  // Hardcoded fallback so it works out of the box; override in Vercel env
+  // with BULK_DELETE_PASSWORD to change.
+  const expected = process.env.BULK_DELETE_PASSWORD ?? "xyz123";
+  if (typeof password !== "string" || password !== expected) {
+    throw new Error("incorrect_password");
+  }
+  if (!Array.isArray(slugs) || slugs.length === 0) return { deleted: 0 };
+  // Cap to avoid runaway requests
+  const targets = Array.from(new Set(slugs)).slice(0, 200);
+  let deleted = 0;
+  for (const slug of targets) {
+    try {
+      await deleteTicket(slug);
+      deleted++;
+    } catch (e) {
+      console.error(`bulk delete failed for ${slug}:`, e);
+    }
+  }
+  revalidatePath("/");
+  return { deleted };
+}
+
 export async function reopenTicketAction(slug: string) {
   let wasClosed = false;
   const after = await updateTicket(slug, (t) => {
