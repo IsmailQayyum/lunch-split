@@ -125,7 +125,7 @@ export default function DashboardFilter({ entries }: Props) {
     if (slugs.length === 0) return;
     startTransition(async () => {
       try {
-        const res = await bulkDeleteTicketsAction(slugs, password);
+        const res = await bulkDeleteTicketsAction(slugs);
         // Action revalidates / — the parent server component will re-render
         // with the trimmed index. Reset our local state.
         exitSelectMode();

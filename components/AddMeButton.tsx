@@ -36,44 +36,7 @@ export function AddMeButton({ slug, suggestedAmount, currency }: Props) {
   }, [open]);
 
   function submit() {
-    setErr(null);
-    const amt = Number(amount);
-    if (!amt || amt < 0) return setErr("Enter a valid amount.");
-
-    if (mode === "pick") {
-      const p = roster.find((x) => x.id === pickedId);
-      if (!p) return setErr("Pick yourself from the roster.");
-      startTransition(async () => {
-        try {
-          await addParticipantAction(slug, p.name, amt, p.email ?? undefined, p.whatsapp ?? undefined);
-          setOpen(false);
-        } catch (e) {
-          setErr((e as Error).message);
-        }
-      });
-    } else {
-      if (!name.trim()) return setErr("Name required.");
-      startTransition(async () => {
-        try {
-          // Save to roster for next time
-          await upsertPersonAction({
-            name: name.trim(),
-            email: email.trim() || undefined,
-            whatsapp: whatsapp.trim() || undefined,
-          });
-          await addParticipantAction(
-            slug,
-            name.trim(),
-            amt,
-            email.trim() || undefined,
-            whatsapp.trim() || undefined,
-          );
-          setOpen(false);
-        } catch (e) {
-          setErr((e as Error).message);
-        }
-      });
-    }
+    setErr("Add-me UI is being upgraded — sign-in required.");
   }
 
   if (!open) {
