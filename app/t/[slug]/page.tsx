@@ -48,6 +48,7 @@ import { TicketVisitRecorder } from "@/components/TicketVisitRecorder";
 import { SharePanel } from "@/components/SharePanel";
 import { LivePoller } from "@/components/LivePoller";
 import { AddMeButton } from "@/components/AddMeButton";
+import { AddPersonPanel } from "@/components/AddPersonPanel";
 import { ShareLinkBar } from "@/components/ShareLinkBar";
 
 export const dynamic = "force-dynamic";
@@ -270,29 +271,44 @@ export default async function TicketPage({
         }}
       />
 
-      {/* Add me */}
+      {/* Add me / Payer-add-someone */}
       {ticket.status === "open" && (
         <>
           <div className="divider-dots my-8" />
-          <AddMeButton
-            slug={slug}
-            suggestedAmount={suggestedAmount}
-            currency={ticket.currency}
-            viewer={
-              viewer
-                ? {
-                    email: viewer.email,
-                    name: viewer.person?.name ?? viewer.email.split("@")[0],
-                  }
-                : null
-            }
-            alreadyOnTicket={
-              !!viewer &&
-              ticket.participants.some(
-                (p) => (p.email ?? "").toLowerCase() === viewer.email,
-              )
-            }
-          />
+          {isPayer ? (
+            <AddPersonPanel
+              slug={slug}
+              currency={ticket.currency}
+              suggestedAmount={suggestedAmount}
+              roster={roster}
+              excludeEmails={[
+                ...ticket.participants
+                  .map((p) => p.email)
+                  .filter((e): e is string => !!e),
+                ...(ticket.payer.email ? [ticket.payer.email] : []),
+              ]}
+            />
+          ) : (
+            <AddMeButton
+              slug={slug}
+              suggestedAmount={suggestedAmount}
+              currency={ticket.currency}
+              viewer={
+                viewer
+                  ? {
+                      email: viewer.email,
+                      name: viewer.person?.name ?? viewer.email.split("@")[0],
+                    }
+                  : null
+              }
+              alreadyOnTicket={
+                !!viewer &&
+                ticket.participants.some(
+                  (p) => (p.email ?? "").toLowerCase() === viewer.email,
+                )
+              }
+            />
+          )}
         </>
       )}
 
