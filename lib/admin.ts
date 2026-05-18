@@ -28,5 +28,16 @@ export async function enableAdmin(): Promise<void> {
 
 export async function disableAdmin(): Promise<void> {
   const jar = await cookies();
-  jar.delete(ADMIN_COOKIE);
+  // Overwrite with an expired cookie carrying the same path the cookie was
+  // set with. `jar.delete(name)` alone can leave the original cookie intact
+  // when the request path differs from the cookie's path.
+  jar.set({
+    name: ADMIN_COOKIE,
+    value: "",
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 0,
+  });
 }

@@ -2,7 +2,6 @@ import { readIndexOrRebuild } from "@/lib/tickets-index";
 import { getRoster } from "@/lib/store-roster";
 import { getViewer } from "@/lib/auth";
 import { disableAdminAction } from "@/lib/actions/admin";
-import { Button } from "@/components/ui/button";
 import DashboardFilter from "@/components/DashboardFilter";
 import { RosterEditor } from "@/app/people/RosterEditor";
 
@@ -22,9 +21,9 @@ export async function AdminDashboard() {
           on this page and inline across the app.
         </p>
         <form action={disableAdminAction} className="mt-4">
-          <Button type="submit" variant="ghost" size="sm">
+          <button type="submit" className="btn btn-outline btn-sm">
             ↑ Disable admin mode
-          </Button>
+          </button>
         </form>
       </div>
 
