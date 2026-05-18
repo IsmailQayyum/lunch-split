@@ -9,6 +9,10 @@ type Props = {
   entries: IndexEntry[];
   viewerEmail: string | null;
   isAdmin?: boolean;
+  youOwe?: number;
+  owedToYou?: number;
+  youOweCount?: number;
+  owedToYouCount?: number;
 };
 
 function fmtBillDate(iso: string | null | undefined): string {
@@ -28,7 +32,17 @@ function fmtBillDate(iso: string | null | undefined): string {
 
 type DatePreset = "all" | "today" | "week" | "month";
 
-export default function DashboardFilter({ entries, viewerEmail, isAdmin = false }: Props) {
+export default function DashboardFilter({
+  entries,
+  viewerEmail,
+  isAdmin = false,
+  youOwe = 0,
+  owedToYou = 0,
+  youOweCount = 0,
+  owedToYouCount = 0,
+}: Props) {
+  const loggedIn = viewerEmail !== null;
+  const showBalances = loggedIn && (youOwe > 0 || owedToYou > 0);
   const [query, setQuery] = useState("");
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
 
@@ -246,6 +260,36 @@ export default function DashboardFilter({ entries, viewerEmail, isAdmin = false 
         )}
       </div>
 
+      {/* Personal balance — only when logged in and there's something to show */}
+      {showBalances && (
+        <section className="mb-10">
+          <div className="grid grid-cols-2 gap-4">
+            <div className="border-[1.5px] border-ink p-4">
+              <div className="eyebrow text-saffron">⚠ BILLS YOU&apos;RE SETTLING</div>
+              <div className="display text-[24px] num mt-2 text-saffron">
+                ₨ {Math.round(youOwe).toLocaleString("en-PK")}
+              </div>
+              <div className="text-[10px] text-ink-faint mt-1 font-mono tracking-wider">
+                {youOweCount === 0
+                  ? "ALL CLEAR"
+                  : `ACROSS ${youOweCount} OPEN TICKET${youOweCount !== 1 ? "S" : ""}`}
+              </div>
+            </div>
+            <div className="border-[1.5px] border-ink p-4">
+              <div className="eyebrow text-moss">✓ BILLS PEOPLE OWE YOU</div>
+              <div className="display text-[24px] num mt-2 text-moss">
+                ₨ {Math.round(owedToYou).toLocaleString("en-PK")}
+              </div>
+              <div className="text-[10px] text-ink-faint mt-1 font-mono tracking-wider">
+                {owedToYouCount === 0
+                  ? "ALL CLEAR"
+                  : `ACROSS ${owedToYouCount} OPEN TICKET${owedToYouCount !== 1 ? "S" : ""}`}
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Unresolved */}
       <section>
         <div className="flex items-end justify-between mb-1">
@@ -257,7 +301,7 @@ export default function DashboardFilter({ entries, viewerEmail, isAdmin = false 
               Still owed.
             </div>
           </div>
-          {open.length > 0 && (
+          {!showBalances && open.length > 0 && (
             <div className="text-right">
               <div className="eyebrow">OUTSTANDING</div>
               <div className="display text-[22px] num mt-1 text-saffron">
@@ -271,6 +315,13 @@ export default function DashboardFilter({ entries, viewerEmail, isAdmin = false 
           <div className="text-center py-6 text-[13px] text-ink-soft italic">
             {hasFilters ? (
               "No matching open tickets."
+            ) : !loggedIn ? (
+              <>
+                <Link href="/login" className="ink-link">
+                  Log in
+                </Link>{" "}
+                to see your tickets.
+              </>
             ) : (
               <>
                 All clear. Nobody owes a rupee right now.{" "}
@@ -309,7 +360,11 @@ export default function DashboardFilter({ entries, viewerEmail, isAdmin = false 
         <div className="divider-dots my-4" />
         {closed.length === 0 ? (
           <div className="text-center py-6 text-[13px] text-ink-soft italic">
-            {hasFilters ? "No matching closed tickets." : "No closed tickets yet."}
+            {hasFilters
+              ? "No matching closed tickets."
+              : !loggedIn
+                ? "Settled bills will show up here once you log in."
+                : "No closed tickets yet."}
           </div>
         ) : (
           <ul className="space-y-1">
