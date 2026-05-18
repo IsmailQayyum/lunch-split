@@ -8,6 +8,7 @@ import { bulkDeleteTicketsAction } from "@/lib/actions/tickets";
 type Props = {
   entries: IndexEntry[];
   viewerEmail: string | null;
+  isAdmin?: boolean;
 };
 
 function fmtBillDate(iso: string | null | undefined): string {
@@ -27,7 +28,7 @@ function fmtBillDate(iso: string | null | undefined): string {
 
 type DatePreset = "all" | "today" | "week" | "month";
 
-export default function DashboardFilter({ entries, viewerEmail }: Props) {
+export default function DashboardFilter({ entries, viewerEmail, isAdmin = false }: Props) {
   const [query, setQuery] = useState("");
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
 
@@ -115,7 +116,7 @@ export default function DashboardFilter({ entries, viewerEmail }: Props) {
   function selectAllVisible() {
     const all = new Set<string>();
     for (const e of filtered) {
-      if (viewerEmail && e.payerEmail === viewerEmail) all.add(e.slug);
+      if (isAdmin || (viewerEmail && e.payerEmail === viewerEmail)) all.add(e.slug);
     }
     setSelected(all);
   }
@@ -185,7 +186,7 @@ export default function DashboardFilter({ entries, viewerEmail }: Props) {
           ))}
           <span className="flex-1" />
           {!selectMode ? (
-            viewerEmail && (
+            (viewerEmail || isAdmin) && (
               <button
                 type="button"
                 onClick={() => setSelectMode(true)}
@@ -288,7 +289,7 @@ export default function DashboardFilter({ entries, viewerEmail }: Props) {
                 selectMode={selectMode}
                 selected={selected.has(e.slug)}
                 onToggle={toggleSelect}
-                canSelect={!!viewerEmail && e.payerEmail === viewerEmail}
+                canSelect={isAdmin || (!!viewerEmail && e.payerEmail === viewerEmail)}
               />
             ))}
           </ul>
@@ -321,7 +322,7 @@ export default function DashboardFilter({ entries, viewerEmail }: Props) {
                 selectMode={selectMode}
                 selected={selected.has(e.slug)}
                 onToggle={toggleSelect}
-                canSelect={!!viewerEmail && e.payerEmail === viewerEmail}
+                canSelect={isAdmin || (!!viewerEmail && e.payerEmail === viewerEmail)}
               />
             ))}
           </ul>
@@ -341,7 +342,7 @@ export default function DashboardFilter({ entries, viewerEmail }: Props) {
               <span className="text-saffron">
                 DELETE {selected.size} BILL{selected.size !== 1 ? "S" : ""}
               </span>
-              <span className="text-ink-faint ml-2">· yours only</span>
+              <span className="text-ink-faint ml-2">· {isAdmin ? "admin" : "yours only"}</span>
             </div>
             <button
               type="button"

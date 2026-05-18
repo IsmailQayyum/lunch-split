@@ -1,12 +1,17 @@
 import Link from "next/link";
 import { getRoster } from "@/lib/store-roster";
 import { getViewer } from "@/lib/auth";
+import { isAdmin } from "@/lib/admin";
 import { RosterEditor } from "./RosterEditor";
 
 export const dynamic = "force-dynamic";
 
 export default async function PeoplePage() {
-  const [roster, viewer] = await Promise.all([getRoster(), getViewer()]);
+  const [roster, viewer, admin] = await Promise.all([
+    getRoster(),
+    getViewer(),
+    isAdmin(),
+  ]);
   return (
     <main className="max-w-[560px] mx-auto px-5 pt-8 pb-16 animate-print">
       <Link href="/" className="eyebrow ink-link">
@@ -20,7 +25,7 @@ export default async function PeoplePage() {
         </p>
       </header>
       <div className="divider-dots mb-8" />
-      <RosterEditor initial={roster} viewerEmail={viewer?.email ?? null} />
+      <RosterEditor initial={roster} viewerEmail={viewer?.email ?? null} isAdmin={admin} />
     </main>
   );
 }

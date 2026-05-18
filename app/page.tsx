@@ -2,6 +2,7 @@ import Link from "next/link";
 import { readIndexOrRebuild } from "@/lib/tickets-index";
 import DashboardFilter from "@/components/DashboardFilter";
 import { getViewer } from "@/lib/auth";
+import { isAdmin } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +21,11 @@ function nowStamp() {
 }
 
 export default async function Home() {
-  const [index, viewer] = await Promise.all([readIndexOrRebuild(), getViewer()]);
+  const [index, viewer, admin] = await Promise.all([
+    readIndexOrRebuild(),
+    getViewer(),
+    isAdmin(),
+  ]);
 
   return (
     <main className="max-w-[560px] mx-auto px-5 pt-10 pb-16 animate-print">
@@ -56,7 +61,7 @@ export default async function Home() {
 
       <div className="divider-dots my-10" />
 
-      <DashboardFilter entries={index} viewerEmail={viewer?.email ?? null} />
+      <DashboardFilter entries={index} viewerEmail={viewer?.email ?? null} isAdmin={admin} />
 
       <footer className="mt-16 text-center space-y-3">
         <div className="divider-double max-w-[180px] mx-auto" />
