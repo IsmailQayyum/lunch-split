@@ -6,11 +6,44 @@ import { cookies } from "next/headers";
 export const ADMIN_PASSWORD = "iamthebest";
 
 const ADMIN_COOKIE = "ls_admin";
+const ADMIN_SILENT_COOKIE = "ls_admin_silent";
 const ADMIN_MAX_AGE_SECONDS = 60 * 60 * 24 * 365; // 1 year
 
 export async function isAdmin(): Promise<boolean> {
   const jar = await cookies();
   return jar.get(ADMIN_COOKIE)?.value === "1";
+}
+
+// Whether admin has opted to suppress Slack notifications for their actions.
+// Only meaningful when isAdmin() is also true.
+export async function isAdminSilent(): Promise<boolean> {
+  const jar = await cookies();
+  return jar.get(ADMIN_SILENT_COOKIE)?.value === "1";
+}
+
+export async function setAdminSilent(silent: boolean): Promise<void> {
+  const jar = await cookies();
+  if (silent) {
+    jar.set({
+      name: ADMIN_SILENT_COOKIE,
+      value: "1",
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: ADMIN_MAX_AGE_SECONDS,
+    });
+  } else {
+    jar.set({
+      name: ADMIN_SILENT_COOKIE,
+      value: "",
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 0,
+    });
+  }
 }
 
 export async function enableAdmin(): Promise<void> {
@@ -33,6 +66,15 @@ export async function disableAdmin(): Promise<void> {
   // when the request path differs from the cookie's path.
   jar.set({
     name: ADMIN_COOKIE,
+    value: "",
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 0,
+  });
+  jar.set({
+    name: ADMIN_SILENT_COOKIE,
     value: "",
     httpOnly: true,
     sameSite: "lax",
