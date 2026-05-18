@@ -67,9 +67,11 @@ type EditingId = string | "new" | "new-self" | null;
 export function RosterEditor({
   initial,
   viewerEmail,
+  isAdmin = false,
 }: {
   initial: Person[];
   viewerEmail: string | null;
+  isAdmin?: boolean;
 }) {
   const [roster, setRoster] = useState(initial);
   const [editingId, setEditingId] = useState<EditingId>(null);
@@ -167,7 +169,7 @@ export function RosterEditor({
 
   return (
     <div className="space-y-10">
-      {!viewerEmail && (
+      {!viewerEmail && !isAdmin && (
         <div className="border border-dashed border-saffron/50 p-4 text-center text-[13px] text-ink-soft italic">
           Sign in to edit your card.{" "}
           <a href="/login" className="ink-link">
@@ -224,7 +226,7 @@ export function RosterEditor({
       <section>
         <div className="flex items-center justify-between mb-4">
           <div className="eyebrow">{others.length} ON THE CREW</div>
-          {viewerEmail && editingId !== "new" && (
+          {(viewerEmail || isAdmin) && editingId !== "new" && (
             <Button size="sm" variant="outline" onClick={startNew}>
               + Add name
             </Button>
@@ -250,9 +252,28 @@ export function RosterEditor({
         )}
 
         <div className="space-y-3">
-          {others.map((p) => (
-            <PersonLine key={p.id} person={p} />
-          ))}
+          {others.map((p) =>
+            isAdmin && editingId === p.id ? (
+              <FormCard
+                key={p.id}
+                title={`EDIT · ${p.name.toUpperCase()}`}
+                form={form}
+                setForm={setForm}
+                err={err}
+                pending={pending}
+                onSave={save}
+                onCancel={cancel}
+                onDelete={() => remove(p.id)}
+              />
+            ) : (
+              <PersonLine
+                key={p.id}
+                person={p}
+                editable={isAdmin}
+                onEdit={isAdmin ? () => startEdit(p) : undefined}
+              />
+            ),
+          )}
         </div>
       </section>
     </div>
