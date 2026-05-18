@@ -41,6 +41,7 @@ import { findPersonByEmail, getRoster } from "@/lib/store-roster";
 import { slackShareText, shortShareText } from "@/lib/share-text";
 import type { PayerProfile } from "@/lib/types";
 import { getViewer, isPayer as viewerIsPayer } from "@/lib/auth";
+import { isAdmin } from "@/lib/admin";
 import { PaymentMethodsPanel } from "@/components/PaymentMethodsPanel";
 import { ParticipantRow } from "@/components/ParticipantRow";
 import { CloseTicketButton } from "@/components/CloseTicketButton";
@@ -91,8 +92,8 @@ export default async function TicketPage({
   const ticket = await getTicket(slug);
   if (!ticket) notFound();
 
-  const viewer = await getViewer();
-  const isPayer = viewerIsPayer(viewer, ticket.payer.email);
+  const [viewer, admin] = await Promise.all([getViewer(), isAdmin()]);
+  const isPayer = admin || viewerIsPayer(viewer, ticket.payer.email);
 
   // Pull the payer's *current* payment methods from the roster so updates
   // there reflect on every ticket they're paying. Fall back to the snapshot
