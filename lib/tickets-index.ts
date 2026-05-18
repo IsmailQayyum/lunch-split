@@ -2,7 +2,12 @@ import "server-only";
 import type { Ticket, ParticipantStatus } from "./types";
 import { redis, CAS_LUA, casBackoff, CAS_MAX_ATTEMPTS } from "./redis";
 
-export type IndexParticipant = { name: string; status: ParticipantStatus; amountOwed: number };
+export type IndexParticipant = {
+  name: string;
+  email: string | null;
+  status: ParticipantStatus;
+  amountOwed: number;
+};
 
 export type IndexEntry = {
   slug: string;
@@ -19,6 +24,15 @@ export type IndexEntry = {
   participants: IndexParticipant[];
 };
 
+function normalizeParticipant(p: Partial<IndexParticipant>): IndexParticipant {
+  return {
+    name: p.name ?? "",
+    email: typeof p.email === "string" ? p.email.toLowerCase() : null,
+    status: p.status ?? "pending",
+    amountOwed: p.amountOwed ?? 0,
+  };
+}
+
 function normalizeEntry(e: Partial<IndexEntry> & { slug: string }): IndexEntry {
   return {
     slug: e.slug,
@@ -32,7 +46,9 @@ function normalizeEntry(e: Partial<IndexEntry> & { slug: string }): IndexEntry {
     closedAt: e.closedAt ?? null,
     participantCount: e.participantCount ?? 0,
     settledCount: e.settledCount ?? 0,
-    participants: Array.isArray(e.participants) ? e.participants : [],
+    participants: Array.isArray(e.participants)
+      ? e.participants.map((p) => normalizeParticipant(p as Partial<IndexParticipant>))
+      : [],
   };
 }
 
@@ -55,6 +71,7 @@ export function toIndexEntry(t: Ticket): IndexEntry {
     ).length,
     participants: t.participants.map((p) => ({
       name: p.name,
+      email: p.email ? p.email.toLowerCase() : null,
       status: p.status,
       amountOwed: p.amountOwed,
     })),
@@ -128,9 +145,53 @@ export async function removeIndexEntry(slug: string): Promise<void> {
   throw new Error("removeIndexEntry failed after retries");
 }
 
-// The blob-era rebuild fallback (scan all ticket blobs to reconstruct the
-// index) is no longer needed — Redis preserves the index reliably. Keep
-// the function name so callers (e.g., the home page) don't break.
+// Bump when IndexEntry/IndexParticipant gains a field that older entries
+// won't carry — ensureIndexFresh() will scan ticket:* and rewrite the
+// index once, then short-circuit on subsequent reads.
+const INDEX_VERSION = 2;
+const VERSION_KEY = "tickets:index:version";
+const TICKET_KEY_PREFIX = "ticket:";
+
+async function rebuildIndexFromTickets(): Promise<void> {
+  const entries: IndexEntry[] = [];
+  let cursor: string | number = 0;
+  do {
+    const [next, keys] = (await redis.scan(cursor, {
+      match: `${TICKET_KEY_PREFIX}*`,
+      count: 200,
+    })) as [string, string[]];
+    cursor = next;
+    for (const key of keys) {
+      if (!key.startsWith(TICKET_KEY_PREFIX)) continue;
+      const raw = await redis.get<string>(key);
+      if (!raw) continue;
+      try {
+        const ticket = JSON.parse(raw) as Ticket;
+        if (!ticket?.slug) continue;
+        entries.push(toIndexEntry(ticket));
+      } catch {
+        // skip corrupted blob
+      }
+    }
+  } while (String(cursor) !== "0");
+
+  entries.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  await redis.set(KEY, JSON.stringify(entries));
+}
+
+async function ensureIndexFresh(): Promise<void> {
+  const stored = await redis.get<string>(VERSION_KEY);
+  const current = stored ? Number(stored) : 0;
+  if (current === INDEX_VERSION) return;
+  await rebuildIndexFromTickets();
+  await redis.set(VERSION_KEY, String(INDEX_VERSION));
+}
+
 export async function readIndexOrRebuild(): Promise<IndexEntry[]> {
+  try {
+    await ensureIndexFresh();
+  } catch (e) {
+    console.error("Tickets index rebuild failed:", e);
+  }
   return readIndex();
 }
