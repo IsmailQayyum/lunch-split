@@ -341,6 +341,7 @@ export default function DashboardFilter({
                 selected={selected.has(e.slug)}
                 onToggle={toggleSelect}
                 canSelect={isAdmin || (!!viewerEmail && e.payerEmail === viewerEmail)}
+                viewerEmail={viewerEmail}
               />
             ))}
           </ul>
@@ -378,6 +379,7 @@ export default function DashboardFilter({
                 selected={selected.has(e.slug)}
                 onToggle={toggleSelect}
                 canSelect={isAdmin || (!!viewerEmail && e.payerEmail === viewerEmail)}
+                viewerEmail={viewerEmail}
               />
             ))}
           </ul>
@@ -440,6 +442,7 @@ function BucketLine({
   selected,
   onToggle,
   canSelect,
+  viewerEmail,
 }: {
   entry: IndexEntry;
   kind: "open" | "closed";
@@ -448,6 +451,7 @@ function BucketLine({
   selected: boolean;
   onToggle: (slug: string) => void;
   canSelect: boolean;
+  viewerEmail: string | null;
 }) {
   const settled = `${entry.settledCount}/${entry.participantCount}`;
   const pendingCount = entry.participantCount - entry.settledCount;
@@ -460,6 +464,34 @@ function BucketLine({
   );
   const paidTotal = paid.reduce((s, p) => s + p.amountOwed, 0);
   const pendingTotal = pending.reduce((s, p) => s + p.amountOwed, 0);
+
+  const isViewerPayer = !!viewerEmail && entry.payerEmail === viewerEmail;
+  const viewerShare =
+    viewerEmail && !isViewerPayer
+      ? entry.participants.find((p) => p.email === viewerEmail) ?? null
+      : null;
+  const viewerShareSettled =
+    viewerShare?.status === "confirmed" || viewerShare?.status === "cash";
+
+  let personalLine: { text: string; tone: "saffron" | "moss" } | null = null;
+  if (kind === "open") {
+    if (isViewerPayer && pendingTotal > 0) {
+      personalLine = {
+        text: `₨${Math.round(pendingTotal).toLocaleString("en-PK")} pending`,
+        tone: "saffron",
+      };
+    } else if (viewerShare) {
+      personalLine = viewerShareSettled
+        ? {
+            text: `you paid ₨${Math.round(viewerShare.amountOwed).toLocaleString("en-PK")}`,
+            tone: "moss",
+          }
+        : {
+            text: `you owe ₨${Math.round(viewerShare.amountOwed).toLocaleString("en-PK")}`,
+            tone: "saffron",
+          };
+    }
+  }
 
   const dateBlock =
     kind === "closed" && entry.closedAt ? (
@@ -519,6 +551,15 @@ function BucketLine({
         <div className="text-[10px] text-ink-faint mt-0.5 font-mono tracking-wider">
           {dateBlock} · {entry.payerName} · {settled}
         </div>
+        {personalLine && (
+          <div
+            className={`text-[10px] mt-0.5 font-mono tracking-wider ${
+              personalLine.tone === "saffron" ? "text-saffron" : "text-moss"
+            }`}
+          >
+            {personalLine.text}
+          </div>
+        )}
       </div>
     </div>
   );
