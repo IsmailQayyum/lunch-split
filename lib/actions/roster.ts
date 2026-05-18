@@ -10,7 +10,8 @@ import {
   type Person,
   type WalletApp,
 } from "@/lib/store-roster";
-import { requireViewer, isSelf } from "@/lib/auth";
+import { requireViewer, getViewer, isSelf } from "@/lib/auth";
+import { isAdmin } from "@/lib/admin";
 
 const newId = customAlphabet(
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
@@ -44,20 +45,21 @@ export async function listPeopleAction(): Promise<Person[]> {
 }
 
 export async function upsertPersonAction(input: unknown): Promise<Person> {
-  const viewer = await requireViewer();
+  const admin = await isAdmin();
+  const viewer = admin ? await getViewer() : await requireViewer();
   const data = personSchema.parse(input);
   const walletApps = Array.from(new Set(data.walletApps)).filter((a): a is WalletApp =>
     WALLET_APPS.some((w) => w.id === a),
   );
 
   if (data.id) {
-    // Editing an existing entry — only allowed on your own card.
+    // Editing an existing entry — only allowed on your own card (admin bypasses).
     const roster = await getRoster();
     const existing = roster.find((p) => p.id === data.id);
     if (!existing) throw new Error("Person not found");
-    if (!isSelf(viewer, existing.email)) throw new Error("not_authorized");
+    if (!admin && !isSelf(viewer, existing.email)) throw new Error("not_authorized");
   }
-  // Creating a new entry — any signed-in viewer can do it.
+  // Creating a new entry — any signed-in viewer or admin can do it.
 
   const next: Person = {
     id: data.id ?? newId(),
@@ -89,10 +91,11 @@ export async function upsertPersonAction(input: unknown): Promise<Person> {
 }
 
 export async function removePersonAction(id: string): Promise<void> {
-  const viewer = await requireViewer();
+  const admin = await isAdmin();
+  const viewer = admin ? await getViewer() : await requireViewer();
   const roster = await getRoster();
   const existing = roster.find((p) => p.id === id);
   if (!existing) return;
-  if (!isSelf(viewer, existing.email)) throw new Error("not_authorized");
+  if (!admin && !isSelf(viewer, existing.email)) throw new Error("not_authorized");
   await updateRoster((r) => r.filter((p) => p.id !== id));
 }

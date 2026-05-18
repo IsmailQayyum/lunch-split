@@ -11,35 +11,43 @@ import { sendReminderEmail } from "@/lib/email";
 import { notifySlack, ticketUrl } from "@/lib/slack-notify";
 import { getTicket, putTicket, updateTicket, deleteTicket } from "@/lib/store";
 import type { Participant, Ticket, ParticipantStatus } from "@/lib/types";
-import { requireViewer, isPayer as viewerIsPayer, isSelf } from "@/lib/auth";
+import { requireViewer, getViewer, isPayer as viewerIsPayer, isSelf } from "@/lib/auth";
+import { isAdmin } from "@/lib/admin";
+
+async function requireViewerOrAdmin() {
+  const admin = await isAdmin();
+  const viewer = admin ? await getViewer() : await requireViewer();
+  return { viewer, admin };
+}
 
 async function requirePayer(slug: string) {
-  const viewer = await requireViewer();
+  const { viewer, admin } = await requireViewerOrAdmin();
   const t = await getTicket(slug);
   if (!t) throw new Error("Ticket not found");
-  if (!viewerIsPayer(viewer, t.payer.email)) throw new Error("not_authorized");
-  return { viewer, ticket: t };
+  if (!admin && !viewerIsPayer(viewer, t.payer.email)) throw new Error("not_authorized");
+  return { viewer, ticket: t, admin };
 }
 
 async function requirePayerOrSelfForParticipant(slug: string, participantId: string) {
-  const viewer = await requireViewer();
+  const { viewer, admin } = await requireViewerOrAdmin();
   const t = await getTicket(slug);
   if (!t) throw new Error("Ticket not found");
   const p = t.participants.find((x) => x.id === participantId);
   if (!p) throw new Error("Participant not found");
-  if (viewerIsPayer(viewer, t.payer.email)) return { viewer, ticket: t, participant: p };
-  if (isSelf(viewer, p.email)) return { viewer, ticket: t, participant: p };
+  if (admin) return { viewer, ticket: t, participant: p, admin };
+  if (viewerIsPayer(viewer, t.payer.email)) return { viewer, ticket: t, participant: p, admin };
+  if (isSelf(viewer, p.email)) return { viewer, ticket: t, participant: p, admin };
   throw new Error("not_authorized");
 }
 
 async function requireSelfForParticipant(slug: string, participantId: string) {
-  const viewer = await requireViewer();
+  const { viewer, admin } = await requireViewerOrAdmin();
   const t = await getTicket(slug);
   if (!t) throw new Error("Ticket not found");
   const p = t.participants.find((x) => x.id === participantId);
   if (!p) throw new Error("Participant not found");
-  if (!isSelf(viewer, p.email)) throw new Error("not_authorized");
-  return { viewer, ticket: t, participant: p };
+  if (!admin && !isSelf(viewer, p.email)) throw new Error("not_authorized");
+  return { viewer, ticket: t, participant: p, admin };
 }
 
 function settledOf(t: Ticket): number {
@@ -79,9 +87,14 @@ const createTicketSchema = z.object({
 
 export async function createTicketAction(input: unknown) {
   const data = createTicketSchema.parse(input);
-  const viewer = await requireViewer();
-  // Always pin payer.email to the viewer (defense against client tampering).
-  data.payer.email = viewer.email;
+  const { viewer } = await requireViewerOrAdmin();
+  if (viewer) {
+    // Pin payer.email to the viewer (defense against client tampering).
+    data.payer.email = viewer.email;
+  } else if (!data.payer.email) {
+    // Admin without a session must supply a payer email in the form.
+    throw new Error("payer_email_required");
+  }
 
   let shares: number[];
   if (data.splitMode === "even") {
@@ -316,7 +329,7 @@ export async function deleteTicketAction(slug: string) {
 export async function bulkDeleteTicketsAction(
   slugs: string[],
 ): Promise<{ deleted: number; skipped: number }> {
-  const viewer = await requireViewer();
+  const { viewer, admin } = await requireViewerOrAdmin();
   if (!Array.isArray(slugs) || slugs.length === 0) return { deleted: 0, skipped: 0 };
   const targets = Array.from(new Set(slugs)).slice(0, 200);
   let deleted = 0;
@@ -328,7 +341,7 @@ export async function bulkDeleteTicketsAction(
         skipped++;
         continue;
       }
-      if (!viewerIsPayer(viewer, t.payer.email)) {
+      if (!admin && !viewerIsPayer(viewer, t.payer.email)) {
         skipped++;
         continue;
       }
@@ -425,7 +438,8 @@ export async function addParticipantByPayerAction(slug: string, input: unknown) 
 }
 
 export async function addParticipantAction(slug: string, amount: number) {
-  const viewer = await requireViewer();
+  const { viewer } = await requireViewerOrAdmin();
+  if (!viewer) throw new Error("admin_no_self");
   await updateTicket(slug, (t) => {
     if (t.status !== "open") throw new Error("Ticket is closed");
     if (t.participants.some((p) => (p.email ?? "").toLowerCase() === viewer.email)) {
