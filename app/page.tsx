@@ -53,9 +53,6 @@ export default async function Home() {
           <Link href="/people" className="eyebrow ink-link">
             ⋯ MANAGE THE LUNCH ROSTER →
           </Link>
-          <Link href="/setup" className="eyebrow ink-link">
-            ⌁ WIRE UP THE SLACK SHORTCUT →
-          </Link>
         </div>
       </div>
 
