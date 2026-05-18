@@ -108,16 +108,20 @@ export async function createTicketAction(input: unknown) {
       accountTitle: data.payer.accountTitle ?? null,
       acceptsCash: data.payer.acceptsCash,
     },
-    participants: data.participants.map((p, i) => ({
-      id: newParticipantId(),
-      name: p.name,
-      email: p.email ?? null,
-      whatsapp: p.whatsapp ?? null,
-      amountOwed: shares[i],
-      status: "pending" as ParticipantStatus,
-      selfMarkedAt: null,
-      confirmedAt: null,
-    })),
+    participants: data.participants.map((p, i) => {
+      const isPayer =
+        !!data.payer.email && (p.email ?? "").toLowerCase() === data.payer.email.toLowerCase();
+      return {
+        id: newParticipantId(),
+        name: p.name,
+        email: p.email ?? null,
+        whatsapp: p.whatsapp ?? null,
+        amountOwed: shares[i],
+        status: (isPayer ? "confirmed" : "pending") as ParticipantStatus,
+        selfMarkedAt: null,
+        confirmedAt: isPayer ? now : null,
+      };
+    }),
     reminders: [],
     status: "open",
     createdAt: now,
