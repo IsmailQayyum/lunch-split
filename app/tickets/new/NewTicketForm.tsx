@@ -37,10 +37,14 @@ export function NewTicketForm({
     () => selectedIds.map((id) => roster.find((p) => p.id === id)).filter((x): x is Person => !!x),
     [selectedIds, roster],
   );
+  // The payer is always part of the split — they ate too.
+  // Split total across (payer + selected others). First share goes to the payer.
+  const splitCount = selected.length + 1;
   const evenShares =
     splitMode === "even" && totalNum > 0 && selected.length > 0
-      ? splitEvenly(totalNum, selected.length)
+      ? splitEvenly(totalNum, splitCount)
       : null;
+  const payerShare = evenShares ? evenShares[0] : 0;
 
   function togglePerson(id: string) {
     if (id === payer.id) return; // never add the payer to participants
@@ -58,7 +62,19 @@ export function NewTicketForm({
     if (!totalNum) return setError("Bill total needs a number.");
     if (selected.length === 0) return setError("Pick at least one person.");
 
-    const participants = selected.map((p, i) => ({
+    // Payer goes first; their participant row is auto-marked confirmed server-side.
+    const payerParticipant = {
+      name: payer.name,
+      email: payer.email ?? undefined,
+      whatsapp: payer.whatsapp ?? undefined,
+      amount:
+        splitMode === "custom"
+          ? Number(customAmounts[payer.id] ?? "0") || 0
+          : evenShares
+            ? evenShares[0]
+            : undefined,
+    };
+    const others = selected.map((p, i) => ({
       name: p.name,
       email: p.email ?? undefined,
       whatsapp: p.whatsapp ?? undefined,
@@ -66,9 +82,10 @@ export function NewTicketForm({
         splitMode === "custom"
           ? Number(customAmounts[p.id] ?? "0") || 0
           : evenShares
-            ? evenShares[i]
+            ? evenShares[i + 1]
             : undefined,
     }));
+    const participants = [payerParticipant, ...others];
 
     startTransition(async () => {
       try {
@@ -185,15 +202,41 @@ export function NewTicketForm({
         {selected.length > 0 && (
           <div className="mt-6 space-y-3 animate-fade-up">
             <div className="eyebrow">
-              {selected.length} SELECTED ·{" "}
+              SPLITTING {splitCount} WAYS ·{" "}
               {splitMode === "even" && totalNum > 0 ? (
-                <span>~₨ {Math.floor(totalNum / selected.length).toLocaleString("en-PK")} each</span>
+                <span>~₨ {Math.floor(totalNum / splitCount).toLocaleString("en-PK")} each</span>
               ) : (
                 <span>set shares below</span>
               )}
             </div>
 
             <div className="space-y-2">
+              {/* Payer's own share — already paid (they paid the bill) */}
+              <div className="line-item">
+                <span className="display-italic text-[19px] text-saffron">{payer.name}</span>
+                <span className="text-[10px] font-mono uppercase tracking-wide text-ink-faint ml-2">
+                  · paid
+                </span>
+                <span className="leader" />
+                {splitMode === "custom" ? (
+                  <div className="w-28">
+                    <Input
+                      type="number"
+                      placeholder="₨"
+                      value={customAmounts[payer.id] ?? ""}
+                      onChange={(e) =>
+                        setCustomAmounts((m) => ({ ...m, [payer.id]: e.target.value }))
+                      }
+                      className="text-right"
+                    />
+                  </div>
+                ) : (
+                  <span className="display text-[20px] num text-saffron">
+                    ₨ {payerShare.toLocaleString("en-PK")}
+                  </span>
+                )}
+              </div>
+
               {selected.map((p, i) => (
                 <div key={p.id} className="line-item">
                   <span className="display-italic text-[19px]">{p.name}</span>
@@ -212,7 +255,7 @@ export function NewTicketForm({
                     </div>
                   ) : (
                     <span className="display text-[20px] num">
-                      ₨ {(evenShares ? evenShares[i] : 0).toLocaleString("en-PK")}
+                      ₨ {(evenShares ? evenShares[i + 1] : 0).toLocaleString("en-PK")}
                     </span>
                   )}
                 </div>
