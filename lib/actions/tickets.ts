@@ -385,6 +385,45 @@ export async function removeParticipantAction(slug: string, participantId: strin
   revalidatePath(`/t/${slug}`);
 }
 
+const addByPayerSchema = z.object({
+  name: z.string().min(1).max(80),
+  email: z.string().email().optional().or(z.literal("")).transform((v) => v || undefined),
+  whatsapp: opt,
+  amount: z.number().nonnegative(),
+});
+
+export async function addParticipantByPayerAction(slug: string, input: unknown) {
+  await requirePayer(slug);
+  const data = addByPayerSchema.parse(input);
+  const normalizedEmail = data.email?.toLowerCase();
+  await updateTicket(slug, (t) => {
+    if (t.status !== "open") throw new Error("Ticket is closed");
+    if (
+      normalizedEmail &&
+      t.participants.some((p) => (p.email ?? "").toLowerCase() === normalizedEmail)
+    ) {
+      throw new Error("email_already_on_ticket");
+    }
+    return {
+      ...t,
+      participants: [
+        ...t.participants,
+        {
+          id: newParticipantId(),
+          name: data.name.trim(),
+          email: normalizedEmail ?? null,
+          whatsapp: data.whatsapp ?? null,
+          amountOwed: Math.round(data.amount),
+          status: "pending",
+          selfMarkedAt: null,
+          confirmedAt: null,
+        },
+      ],
+    };
+  });
+  revalidatePath(`/t/${slug}`);
+}
+
 export async function addParticipantAction(slug: string, amount: number) {
   const viewer = await requireViewer();
   await updateTicket(slug, (t) => {
