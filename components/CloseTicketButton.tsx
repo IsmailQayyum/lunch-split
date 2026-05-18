@@ -11,12 +11,16 @@ import {
 export function CloseTicketButton({
   slug,
   status,
+  isPayer,
 }: {
   slug: string;
   status: "open" | "closed";
+  isPayer: boolean;
 }) {
   const [pending, startTransition] = useTransition();
   const [deletePending, startDelete] = useTransition();
+
+  if (!isPayer) return null;
 
   return (
     <div className="flex items-center gap-3">

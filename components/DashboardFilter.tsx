@@ -7,6 +7,7 @@ import { bulkDeleteTicketsAction } from "@/lib/actions/tickets";
 
 type Props = {
   entries: IndexEntry[];
+  viewerEmail: string | null;
 };
 
 function fmtBillDate(iso: string | null | undefined): string {
@@ -26,14 +27,13 @@ function fmtBillDate(iso: string | null | undefined): string {
 
 type DatePreset = "all" | "today" | "week" | "month";
 
-export default function DashboardFilter({ entries }: Props) {
+export default function DashboardFilter({ entries, viewerEmail }: Props) {
   const [query, setQuery] = useState("");
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
 
   // Bulk-delete state
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [password, setPassword] = useState("");
   const [pwdError, setPwdError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -109,13 +109,14 @@ export default function DashboardFilter({ entries }: Props) {
   function exitSelectMode() {
     setSelectMode(false);
     setSelected(new Set());
-    setPassword("");
     setPwdError(null);
   }
 
   function selectAllVisible() {
     const all = new Set<string>();
-    for (const e of filtered) all.add(e.slug);
+    for (const e of filtered) {
+      if (viewerEmail && e.payerEmail === viewerEmail) all.add(e.slug);
+    }
     setSelected(all);
   }
 
@@ -125,22 +126,15 @@ export default function DashboardFilter({ entries }: Props) {
     if (slugs.length === 0) return;
     startTransition(async () => {
       try {
-        const res = await bulkDeleteTicketsAction(slugs, password);
-        // Action revalidates / — the parent server component will re-render
-        // with the trimmed index. Reset our local state.
+        const res = await bulkDeleteTicketsAction(slugs);
         exitSelectMode();
-        if (res && typeof res.deleted === "number" && res.deleted < slugs.length) {
+        if (res && typeof res.skipped === "number" && res.skipped > 0) {
           console.warn(
-            `Bulk delete partial: ${res.deleted}/${slugs.length} removed`,
+            `Bulk delete: ${res.deleted} deleted, ${res.skipped} skipped (not owned)`,
           );
         }
       } catch (e) {
-        const msg = (e as Error).message;
-        if (msg === "incorrect_password") {
-          setPwdError("Wrong password.");
-        } else {
-          setPwdError(msg || "Delete failed.");
-        }
+        setPwdError((e as Error).message || "Delete failed.");
       }
     });
   }
@@ -191,13 +185,15 @@ export default function DashboardFilter({ entries }: Props) {
           ))}
           <span className="flex-1" />
           {!selectMode ? (
-            <button
-              type="button"
-              onClick={() => setSelectMode(true)}
-              className="text-[10px] font-mono tracking-wider px-2.5 py-1 border border-saffron/50 text-saffron hover:border-saffron transition-colors"
-            >
-              ✕ DELETE BILLS
-            </button>
+            viewerEmail && (
+              <button
+                type="button"
+                onClick={() => setSelectMode(true)}
+                className="text-[10px] font-mono tracking-wider px-2.5 py-1 border border-saffron/50 text-saffron hover:border-saffron transition-colors"
+              >
+                ✕ DELETE BILLS
+              </button>
+            )
           ) : (
             <button
               type="button"
@@ -292,6 +288,7 @@ export default function DashboardFilter({ entries }: Props) {
                 selectMode={selectMode}
                 selected={selected.has(e.slug)}
                 onToggle={toggleSelect}
+                canSelect={!!viewerEmail && e.payerEmail === viewerEmail}
               />
             ))}
           </ul>
@@ -324,6 +321,7 @@ export default function DashboardFilter({ entries }: Props) {
                 selectMode={selectMode}
                 selected={selected.has(e.slug)}
                 onToggle={toggleSelect}
+                canSelect={!!viewerEmail && e.payerEmail === viewerEmail}
               />
             ))}
           </ul>
@@ -339,35 +337,16 @@ export default function DashboardFilter({ entries }: Props) {
           "
         >
           <div className="max-w-[560px] mx-auto px-5 py-3 flex items-center gap-3 flex-wrap">
-            <div className="text-[12px] font-mono tracking-wider">
+            <div className="text-[12px] font-mono tracking-wider flex-1">
               <span className="text-saffron">
                 DELETE {selected.size} BILL{selected.size !== 1 ? "S" : ""}
               </span>
-              <span className="text-ink-faint ml-2">· enter password</span>
+              <span className="text-ink-faint ml-2">· yours only</span>
             </div>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                setPwdError(null);
-              }}
-              placeholder="• • • • • •"
-              className="
-                flex-1 min-w-[120px] bg-transparent border-b border-ink-faint
-                px-1 py-1 text-[14px] font-mono tracking-wider
-                focus:outline-none focus:border-saffron
-              "
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && password && !pending) runBulkDelete();
-              }}
-              disabled={pending}
-              autoFocus
-            />
             <button
               type="button"
               onClick={runBulkDelete}
-              disabled={pending || !password}
+              disabled={pending}
               className="
                 text-[11px] font-mono tracking-wider px-3 py-1.5
                 bg-saffron text-paper-light border border-saffron
@@ -404,6 +383,7 @@ function BucketLine({
   selectMode,
   selected,
   onToggle,
+  canSelect,
 }: {
   entry: IndexEntry;
   kind: "open" | "closed";
@@ -411,6 +391,7 @@ function BucketLine({
   selectMode: boolean;
   selected: boolean;
   onToggle: (slug: string) => void;
+  canSelect: boolean;
 }) {
   const settled = `${entry.settledCount}/${entry.participantCount}`;
   const pendingCount = entry.participantCount - entry.settledCount;
@@ -448,13 +429,15 @@ function BucketLine({
       {selectMode && (
         <span
           className={`shrink-0 inline-flex items-center justify-center w-5 h-5 mr-2 border-[1.5px] ${
-            selected
-              ? "border-saffron bg-saffron text-paper-light"
-              : "border-ink-faint"
+            !canSelect
+              ? "border-ink-faint/30 bg-ink-faint/10 text-ink-faint"
+              : selected
+                ? "border-saffron bg-saffron text-paper-light"
+                : "border-ink-faint"
           }`}
           aria-hidden
         >
-          {selected ? "✓" : ""}
+          {!canSelect ? "·" : selected ? "✓" : ""}
         </span>
       )}
       <div className="flex items-center gap-2 min-w-0">
@@ -490,14 +473,20 @@ function BucketLine({
       style={{ animationDelay: `${delayMs}ms` }}
     >
       {selectMode ? (
-        <button
-          type="button"
-          onClick={() => onToggle(entry.slug)}
-          className="block w-full text-left"
-          aria-pressed={selected}
-        >
-          {innerLine}
-        </button>
+        canSelect ? (
+          <button
+            type="button"
+            onClick={() => onToggle(entry.slug)}
+            className="block w-full text-left"
+            aria-pressed={selected}
+          >
+            {innerLine}
+          </button>
+        ) : (
+          <div className="block w-full text-left opacity-60 cursor-not-allowed" aria-disabled>
+            {innerLine}
+          </div>
+        )
       ) : (
         <Link href={`/t/${entry.slug}`} className="block">
           {innerLine}

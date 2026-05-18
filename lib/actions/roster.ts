@@ -10,6 +10,7 @@ import {
   type Person,
   type WalletApp,
 } from "@/lib/store-roster";
+import { requireViewer, isSelf } from "@/lib/auth";
 
 const newId = customAlphabet(
   "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
@@ -43,26 +44,40 @@ export async function listPeopleAction(): Promise<Person[]> {
 }
 
 export async function upsertPersonAction(input: unknown): Promise<Person> {
+  const viewer = await requireViewer();
   const data = personSchema.parse(input);
   const walletApps = Array.from(new Set(data.walletApps)).filter((a): a is WalletApp =>
     WALLET_APPS.some((w) => w.id === a),
   );
+
+  if (data.id) {
+    // Editing an existing entry — only allowed on your own card.
+    const roster = await getRoster();
+    const existing = roster.find((p) => p.id === data.id);
+    if (!existing) throw new Error("Person not found");
+    if (!isSelf(viewer, existing.email)) throw new Error("not_authorized");
+  }
+  // Creating a new entry — any signed-in viewer can do it.
+
   const next: Person = {
     id: data.id ?? newId(),
     name: data.name,
-    email: data.email ?? null,
+    email: data.email ? data.email.trim().toLowerCase() : null,
     whatsapp: data.whatsapp ?? null,
     walletNumber: data.walletNumber ?? null,
     walletApps: data.walletNumber ? walletApps : [],
     iban: data.iban ?? null,
     accountTitle: data.accountTitle ?? null,
     acceptsCash: data.acceptsCash,
+    hasAccount: false,
   };
 
   await updateRoster((roster) => {
     if (data.id) {
       const idx = roster.findIndex((p) => p.id === data.id);
       if (idx === -1) throw new Error("Person not found");
+      // Preserve hasAccount from the existing record.
+      next.hasAccount = roster[idx].hasAccount;
       roster[idx] = next;
     } else {
       roster.push(next);
@@ -74,5 +89,10 @@ export async function upsertPersonAction(input: unknown): Promise<Person> {
 }
 
 export async function removePersonAction(id: string): Promise<void> {
-  await updateRoster((roster) => roster.filter((p) => p.id !== id));
+  const viewer = await requireViewer();
+  const roster = await getRoster();
+  const existing = roster.find((p) => p.id === id);
+  if (!existing) return;
+  if (!isSelf(viewer, existing.email)) throw new Error("not_authorized");
+  await updateRoster((r) => r.filter((p) => p.id !== id));
 }

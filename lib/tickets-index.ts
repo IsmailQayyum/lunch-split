@@ -10,6 +10,7 @@ export type IndexEntry = {
   totalAmount: number;
   currency: string;
   payerName: string;
+  payerEmail: string | null;
   status: "open" | "closed";
   createdAt: string;
   closedAt: string | null;
@@ -25,6 +26,7 @@ function normalizeEntry(e: Partial<IndexEntry> & { slug: string }): IndexEntry {
     totalAmount: e.totalAmount ?? 0,
     currency: e.currency ?? "PKR",
     payerName: e.payerName ?? "",
+    payerEmail: typeof e.payerEmail === "string" ? e.payerEmail.toLowerCase() : null,
     status: e.status ?? "open",
     createdAt: e.createdAt ?? new Date().toISOString(),
     closedAt: e.closedAt ?? null,
@@ -43,6 +45,7 @@ export function toIndexEntry(t: Ticket): IndexEntry {
     totalAmount: t.totalAmount,
     currency: t.currency,
     payerName: t.payer.name,
+    payerEmail: t.payer.email ? t.payer.email.toLowerCase() : null,
     status: t.status,
     createdAt: t.createdAt,
     closedAt: t.closedAt,

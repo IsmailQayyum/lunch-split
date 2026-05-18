@@ -1,6 +1,12 @@
 import "server-only";
+import { customAlphabet } from "nanoid";
 import { redis, CAS_LUA, casBackoff, CAS_MAX_ATTEMPTS } from "./redis";
 import { WALLET_APPS, type Person, type WalletApp } from "./wallet-apps";
+
+const newPersonId = customAlphabet(
+  "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789",
+  10,
+);
 
 // Re-export so existing server-side import sites keep working without churn.
 export { WALLET_APPS, findPersonByEmail } from "./wallet-apps";
@@ -41,6 +47,7 @@ function normalize(raw: unknown): Person | null {
     iban: typeof o.iban === "string" ? o.iban : null,
     accountTitle: typeof o.accountTitle === "string" ? o.accountTitle : null,
     acceptsCash: typeof o.acceptsCash === "boolean" ? o.acceptsCash : true,
+    hasAccount: typeof o.hasAccount === "boolean" ? o.hasAccount : false,
   };
 }
 
@@ -88,4 +95,49 @@ export async function updateRoster(
     await casBackoff();
   }
   throw new Error("updateRoster failed after retries");
+}
+
+// Find or create a roster Person for `email` (case-insensitive) and mark
+// hasAccount=true. Used by login. Returns the resolved Person.
+export async function claimAccountByEmail(
+  email: string,
+  fallbackName?: string,
+): Promise<Person> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) throw new Error("email required");
+
+  let resolved: Person | null = null;
+  await updateRoster((roster) => {
+    const idx = roster.findIndex(
+      (p) => (p.email ?? "").toLowerCase() === normalized,
+    );
+    if (idx === -1) {
+      const fresh: Person = {
+        id: newPersonId(),
+        name: fallbackName?.trim() || normalized.split("@")[0],
+        email: normalized,
+        whatsapp: null,
+        walletNumber: null,
+        walletApps: [],
+        iban: null,
+        accountTitle: null,
+        acceptsCash: true,
+        hasAccount: true,
+      };
+      roster.push(fresh);
+      resolved = fresh;
+    } else {
+      const existing = roster[idx];
+      const next: Person = {
+        ...existing,
+        email: normalized,
+        hasAccount: true,
+      };
+      roster[idx] = next;
+      resolved = next;
+    }
+    return roster;
+  });
+  if (!resolved) throw new Error("claimAccountByEmail: resolved is null after update");
+  return resolved;
 }

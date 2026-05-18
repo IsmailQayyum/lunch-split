@@ -1,29 +1,27 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { PersonPicker } from "@/components/PersonPicker";
-import { PayerPicker } from "@/components/PayerPicker";
 import { createTicketAction } from "@/lib/actions/tickets";
 import { splitEvenly } from "@/lib/shares";
 import type { Person } from "@/lib/store-roster";
 
-const ME_KEY = "lunch-split:me-id";
-
 export function NewTicketForm({
   roster: initialRoster,
+  payer,
   initialTitle = "",
   initialTotal = "",
 }: {
   roster: Person[];
+  payer: Person;
   initialTitle?: string;
   initialTotal?: string;
 }) {
   const [roster, setRoster] = useState(initialRoster);
-  const [payerId, setPayerId] = useState<string | null>(null);
 
   const [title, setTitle] = useState(initialTitle);
   const [total, setTotal] = useState(initialTotal);
@@ -34,15 +32,7 @@ export function NewTicketForm({
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem(ME_KEY);
-      if (saved && roster.some((p) => p.id === saved)) setPayerId(saved);
-    } catch {}
-  }, [roster]);
-
   const totalNum = Math.round(Number(total) || 0);
-  const payer = payerId ? roster.find((p) => p.id === payerId) : null;
   const selected = useMemo(
     () => selectedIds.map((id) => roster.find((p) => p.id === id)).filter((x): x is Person => !!x),
     [selectedIds, roster],
@@ -53,32 +43,17 @@ export function NewTicketForm({
       : null;
 
   function togglePerson(id: string) {
-    if (id === payerId) return; // don't add payer to participants
+    if (id === payer.id) return; // never add the payer to participants
     setSelectedIds((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   }
 
   function onPersonAdded(p: Person) {
     setRoster((r) => (r.some((x) => x.id === p.id) ? r : [...r, p]));
-    if (!payerId) {
-      // Default the new person to the payer if none picked yet — common pattern
-    }
     setSelectedIds((s) => (s.includes(p.id) ? s : [...s, p.id]));
-  }
-
-  function selectAsPayer(id: string) {
-    setPayerId(id);
-    setSelectedIds((s) => s.filter((x) => x !== id));
-    try {
-      localStorage.setItem(ME_KEY, id);
-    } catch {}
   }
 
   function submit() {
     setError(null);
-    if (!payer) {
-      setError("Pick yourself as the payer first.");
-      return;
-    }
     if (!title.trim()) return setError("What did you eat? Give it a title.");
     if (!totalNum) return setError("Bill total needs a number.");
     if (selected.length === 0) return setError("Pick at least one person.");
@@ -120,52 +95,39 @@ export function NewTicketForm({
     });
   }
 
-  const payerHasMethod = payer && (payer.walletNumber || payer.iban || payer.acceptsCash);
+  const payerHasMethod = payer.walletNumber || payer.iban || payer.acceptsCash;
 
   return (
     <div className="space-y-10 stagger">
-      {/* PAYER */}
+      {/* PAYER (you) */}
       <section>
         <div className="eyebrow mb-4 text-saffron">§ 01 · WHO PAID</div>
-        {roster.length === 0 ? (
-          <div className="text-[13px] text-ink-soft italic border border-dashed border-ink-faint/50 p-4 text-center">
-            Empty roster.{" "}
+        <div className="line-item py-3 border-y-[1.5px] border-ink">
+          <span className="display-italic text-[22px] text-saffron">{payer.name}</span>
+          <span className="leader" />
+          <span className="eyebrow text-ink-faint">YOU</span>
+        </div>
+        {!payerHasMethod ? (
+          <div className="mt-4 text-[12px] text-saffron italic">
+            Heads up — you have no payment methods saved.{" "}
             <Link href="/people" className="ink-link">
-              Add the lunch crew first →
+              Add them in your profile →
             </Link>
           </div>
         ) : (
-          <>
-            <PayerPicker
-              roster={roster}
-              selectedId={payerId}
-              onSelect={selectAsPayer}
-              onAdded={(p) => setRoster((r) => (r.some((x) => x.id === p.id) ? r : [...r, p]))}
-            />
-            {payer && !payerHasMethod && (
-              <div className="mt-4 text-[12px] text-saffron italic">
-                Heads up — {payer.name} has no payment methods saved.{" "}
-                <Link href="/people" className="ink-link">
-                  Add them in the roster →
-                </Link>
-              </div>
-            )}
-            {payer && payerHasMethod && (
-              <div className="mt-4 text-[12px] text-ink-soft">
-                Payment via{" "}
-                {[
-                  payer.walletNumber && `Mobile (${payer.walletApps.length} apps)`,
-                  payer.iban && "Bank",
-                  payer.acceptsCash && "Cash",
-                ]
-                  .filter(Boolean)
-                  .join(" · ")}{" "}
-                <Link href="/people" className="ink-link ml-1">
-                  edit →
-                </Link>
-              </div>
-            )}
-          </>
+          <div className="mt-4 text-[12px] text-ink-soft">
+            Payment via{" "}
+            {[
+              payer.walletNumber && `Mobile (${payer.walletApps.length} apps)`,
+              payer.iban && "Bank",
+              payer.acceptsCash && "Cash",
+            ]
+              .filter(Boolean)
+              .join(" · ")}{" "}
+            <Link href="/people" className="ink-link ml-1">
+              edit →
+            </Link>
+          </div>
         )}
       </section>
 
@@ -214,7 +176,7 @@ export function NewTicketForm({
         </div>
 
         <PersonPicker
-          roster={roster.filter((p) => p.id !== payerId)}
+          roster={roster.filter((p) => p.id !== payer.id)}
           selectedIds={selectedIds}
           onToggle={togglePerson}
           onAdded={onPersonAdded}

@@ -40,6 +40,7 @@ export async function generateMetadata({
 import { findPersonByEmail, getRoster } from "@/lib/store-roster";
 import { slackShareText, shortShareText } from "@/lib/share-text";
 import type { PayerProfile } from "@/lib/types";
+import { getViewer, isPayer as viewerIsPayer } from "@/lib/auth";
 import { PaymentMethodsPanel } from "@/components/PaymentMethodsPanel";
 import { ParticipantRow } from "@/components/ParticipantRow";
 import { CloseTicketButton } from "@/components/CloseTicketButton";
@@ -88,6 +89,9 @@ export default async function TicketPage({
   const { created } = await searchParams;
   const ticket = await getTicket(slug);
   if (!ticket) notFound();
+
+  const viewer = await getViewer();
+  const isPayer = viewerIsPayer(viewer, ticket.payer.email);
 
   // Pull the payer's *current* payment methods from the roster so updates
   // there reflect on every ticket they're paying. Fall back to the snapshot
@@ -227,6 +231,8 @@ export default async function TicketPage({
               ticketOpen={ticket.status === "open"}
               currency={ticket.currency}
               lastRemindedAt={lastReminderByParticipant.get(p.id) ?? null}
+              viewerEmail={viewer?.email ?? null}
+              isPayer={isPayer}
             />
           ))}
         </div>
@@ -272,6 +278,20 @@ export default async function TicketPage({
             slug={slug}
             suggestedAmount={suggestedAmount}
             currency={ticket.currency}
+            viewer={
+              viewer
+                ? {
+                    email: viewer.email,
+                    name: viewer.person?.name ?? viewer.email.split("@")[0],
+                  }
+                : null
+            }
+            alreadyOnTicket={
+              !!viewer &&
+              ticket.participants.some(
+                (p) => (p.email ?? "").toLowerCase() === viewer.email,
+              )
+            }
           />
         </>
       )}
@@ -290,7 +310,7 @@ export default async function TicketPage({
 
       {/* Close ticket */}
       <div className="flex justify-center">
-        <CloseTicketButton slug={slug} status={ticket.status} />
+        <CloseTicketButton slug={slug} status={ticket.status} isPayer={isPayer} />
       </div>
 
       {/* Receipt footer */}
