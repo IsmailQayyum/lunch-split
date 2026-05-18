@@ -14,7 +14,7 @@ export default async function AdminPage({
   const { error } = await searchParams;
 
   return (
-    <main className="max-w-[520px] mx-auto px-5 pt-16 pb-16 animate-print">
+    <main className={`mx-auto px-5 pt-16 pb-16 animate-print ${admin ? "max-w-[560px]" : "max-w-[420px]"}`}>
       <Link href="/" className="eyebrow ink-link">
         ← BACK
       </Link>
