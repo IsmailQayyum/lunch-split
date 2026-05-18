@@ -2,7 +2,14 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
-import { ADMIN_PASSWORD, enableAdmin, disableAdmin } from "@/lib/admin";
+import {
+  ADMIN_PASSWORD,
+  enableAdmin,
+  disableAdmin,
+  isAdmin,
+  isAdminSilent,
+  setAdminSilent,
+} from "@/lib/admin";
 
 export async function enableAdminAction(formData: FormData) {
   const password = String(formData.get("password") ?? "");
@@ -21,4 +28,10 @@ export async function disableAdminAction() {
   // can leave the cached SessionBar in place even though the cookie is cleared.
   revalidatePath("/", "layout");
   redirect("/");
+}
+
+export async function toggleAdminSilentAction() {
+  if (!(await isAdmin())) throw new Error("not_admin");
+  await setAdminSilent(!(await isAdminSilent()));
+  revalidatePath("/admin");
 }
