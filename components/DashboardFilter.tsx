@@ -96,6 +96,31 @@ export default function DashboardFilter({
         (b.closedAt ?? b.createdAt).localeCompare(a.closedAt ?? a.createdAt),
     );
 
+  // Personal split of open tickets — only meaningful when logged in.
+  const viewerParticipantOf = (e: IndexEntry) =>
+    viewerEmail ? e.participants.find((p) => p.email === viewerEmail) ?? null : null;
+  const isViewerPayerOf = (e: IndexEntry) =>
+    !!viewerEmail && e.payerEmail === viewerEmail;
+  const viewerSettledOn = (e: IndexEntry) => {
+    const p = viewerParticipantOf(e);
+    return p?.status === "confirmed" || p?.status === "cash";
+  };
+
+  const toPay = loggedIn
+    ? open
+        .filter((e) => !isViewerPayerOf(e) && viewerParticipantOf(e) !== null)
+        .sort((a, b) => {
+          const aDone = viewerSettledOn(a);
+          const bDone = viewerSettledOn(b);
+          if (aDone !== bDone) return aDone ? 1 : -1;
+          return b.createdAt.localeCompare(a.createdAt);
+        })
+    : [];
+  const toCollect = loggedIn ? open.filter((e) => isViewerPayerOf(e)) : [];
+  const otherOpen = loggedIn
+    ? open.filter((e) => !isViewerPayerOf(e) && viewerParticipantOf(e) === null)
+    : [];
+
   const stillOwed = open.reduce((s, e) => {
     const pendingTotal = e.participants
       .filter((p) => p.status !== "confirmed" && p.status !== "cash")
@@ -290,62 +315,124 @@ export default function DashboardFilter({
         </section>
       )}
 
-      {/* Unresolved */}
-      <section>
-        <div className="flex items-end justify-between mb-1">
-          <div>
-            <div className="eyebrow text-saffron">
-              ⚠ UNRESOLVED · {open.length}
-            </div>
-            <div className="display-italic text-[34px] leading-none mt-2">
-              Still owed.
-            </div>
-          </div>
-          {!showBalances && open.length > 0 && (
-            <div className="text-right">
-              <div className="eyebrow">OUTSTANDING</div>
-              <div className="display text-[22px] num mt-1 text-saffron">
-                ~ ₨ {Math.round(stillOwed).toLocaleString("en-PK")}
+      {/* Open tickets — split by your role when logged in */}
+      {!loggedIn ? (
+        <section>
+          <div className="flex items-end justify-between mb-1">
+            <div>
+              <div className="eyebrow text-saffron">
+                ⚠ UNRESOLVED · {open.length}
+              </div>
+              <div className="display-italic text-[34px] leading-none mt-2">
+                Still owed.
               </div>
             </div>
-          )}
-        </div>
-        <div className="divider-dots my-4" />
-        {open.length === 0 ? (
-          <div className="text-center py-6 text-[13px] text-ink-soft italic">
-            {hasFilters ? (
-              "No matching open tickets."
-            ) : !loggedIn ? (
-              <>
-                <Link href="/login" className="ink-link">
-                  Log in
-                </Link>{" "}
-                to see your tickets.
-              </>
-            ) : (
-              <>
-                All clear. Nobody owes a rupee right now.{" "}
-                <em className="display-italic">Mashallah.</em>
-              </>
+            {open.length > 0 && (
+              <div className="text-right">
+                <div className="eyebrow">OUTSTANDING</div>
+                <div className="display text-[22px] num mt-1 text-saffron">
+                  ~ ₨ {Math.round(stillOwed).toLocaleString("en-PK")}
+                </div>
+              </div>
             )}
           </div>
-        ) : (
-          <ul className="space-y-1">
-            {open.map((e, i) => (
-              <BucketLine
-                key={e.slug}
-                entry={e}
-                kind="open"
-                delayMs={i * 50}
+          <div className="divider-dots my-4" />
+          {open.length === 0 ? (
+            <div className="text-center py-6 text-[13px] text-ink-soft italic">
+              {hasFilters ? (
+                "No matching open tickets."
+              ) : (
+                <>
+                  <Link href="/login" className="ink-link">
+                    Log in
+                  </Link>{" "}
+                  to see your tickets.
+                </>
+              )}
+            </div>
+          ) : (
+            <ul className="space-y-1">
+              {open.map((e, i) => (
+                <BucketLine
+                  key={e.slug}
+                  entry={e}
+                  kind="open"
+                  delayMs={i * 50}
+                  selectMode={selectMode}
+                  selected={selected.has(e.slug)}
+                  onToggle={toggleSelect}
+                  canSelect={isAdmin || (!!viewerEmail && e.payerEmail === viewerEmail)}
+                  viewerEmail={viewerEmail}
+                />
+              ))}
+            </ul>
+          )}
+        </section>
+      ) : (
+        <>
+          {/* Yours to pay */}
+          <OpenSection
+            title="Your share."
+            eyebrow={`⚠ YOURS TO PAY · ${toPay.length}`}
+            eyebrowTone="saffron"
+            entries={toPay}
+            selectMode={selectMode}
+            selected={selected}
+            onToggle={toggleSelect}
+            isAdmin={isAdmin}
+            viewerEmail={viewerEmail}
+            emptyHint={null}
+          />
+
+          {/* Yours to collect */}
+          <div className={toPay.length > 0 ? "mt-12" : ""}>
+            <OpenSection
+              title="Awaiting payment."
+              eyebrow={`✓ YOURS TO COLLECT · ${toCollect.length}`}
+              eyebrowTone="moss"
+              entries={toCollect}
+              selectMode={selectMode}
+              selected={selected}
+              onToggle={toggleSelect}
+              isAdmin={isAdmin}
+              viewerEmail={viewerEmail}
+              emptyHint={null}
+            />
+          </div>
+
+          {/* Other open tickets — only relevant for admins viewing the wider set */}
+          {otherOpen.length > 0 && (
+            <div className="mt-12">
+              <OpenSection
+                title="Other open tickets."
+                eyebrow={`○ OTHER OPEN · ${otherOpen.length}`}
+                eyebrowTone="ink"
+                entries={otherOpen}
                 selectMode={selectMode}
-                selected={selected.has(e.slug)}
+                selected={selected}
                 onToggle={toggleSelect}
-                canSelect={isAdmin || (!!viewerEmail && e.payerEmail === viewerEmail)}
+                isAdmin={isAdmin}
+                viewerEmail={viewerEmail}
+                emptyHint={null}
               />
-            ))}
-          </ul>
-        )}
-      </section>
+            </div>
+          )}
+
+          {/* Empty state when literally nothing is open */}
+          {open.length === 0 && (
+            <div className="text-center py-6 text-[13px] text-ink-soft italic">
+              {hasFilters ? (
+                "No matching open tickets."
+              ) : (
+                <>
+                  All clear. Nobody owes a rupee right now.{" "}
+                  <em className="display-italic">Mashallah.</em>
+                </>
+              )}
+            </div>
+          )}
+        </>
+      )}
 
       {/* Resolved */}
       <section className="mt-12">
@@ -378,6 +465,7 @@ export default function DashboardFilter({
                 selected={selected.has(e.slug)}
                 onToggle={toggleSelect}
                 canSelect={isAdmin || (!!viewerEmail && e.payerEmail === viewerEmail)}
+                viewerEmail={viewerEmail}
               />
             ))}
           </ul>
@@ -432,6 +520,72 @@ export default function DashboardFilter({
   );
 }
 
+function OpenSection({
+  title,
+  eyebrow,
+  eyebrowTone,
+  entries,
+  selectMode,
+  selected,
+  onToggle,
+  isAdmin,
+  viewerEmail,
+  emptyHint,
+}: {
+  title: string;
+  eyebrow: string;
+  eyebrowTone: "saffron" | "moss" | "ink";
+  entries: IndexEntry[];
+  selectMode: boolean;
+  selected: Set<string>;
+  onToggle: (slug: string) => void;
+  isAdmin: boolean;
+  viewerEmail: string | null;
+  emptyHint: string | null;
+}) {
+  if (entries.length === 0 && !emptyHint) return null;
+  const toneClass =
+    eyebrowTone === "saffron"
+      ? "text-saffron"
+      : eyebrowTone === "moss"
+        ? "text-moss"
+        : "text-ink-faint";
+  return (
+    <section>
+      <div className="flex items-end justify-between mb-1">
+        <div>
+          <div className={`eyebrow ${toneClass}`}>{eyebrow}</div>
+          <div className="display-italic text-[34px] leading-none mt-2">
+            {title}
+          </div>
+        </div>
+      </div>
+      <div className="divider-dots my-4" />
+      {entries.length === 0 ? (
+        <div className="text-center py-6 text-[13px] text-ink-soft italic">
+          {emptyHint}
+        </div>
+      ) : (
+        <ul className="space-y-1">
+          {entries.map((e, i) => (
+            <BucketLine
+              key={e.slug}
+              entry={e}
+              kind="open"
+              delayMs={i * 50}
+              selectMode={selectMode}
+              selected={selected.has(e.slug)}
+              onToggle={onToggle}
+              canSelect={isAdmin || (!!viewerEmail && e.payerEmail === viewerEmail)}
+              viewerEmail={viewerEmail}
+            />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 function BucketLine({
   entry,
   kind,
@@ -440,6 +594,7 @@ function BucketLine({
   selected,
   onToggle,
   canSelect,
+  viewerEmail,
 }: {
   entry: IndexEntry;
   kind: "open" | "closed";
@@ -448,6 +603,7 @@ function BucketLine({
   selected: boolean;
   onToggle: (slug: string) => void;
   canSelect: boolean;
+  viewerEmail: string | null;
 }) {
   const settled = `${entry.settledCount}/${entry.participantCount}`;
   const pendingCount = entry.participantCount - entry.settledCount;
@@ -460,6 +616,34 @@ function BucketLine({
   );
   const paidTotal = paid.reduce((s, p) => s + p.amountOwed, 0);
   const pendingTotal = pending.reduce((s, p) => s + p.amountOwed, 0);
+
+  const isViewerPayer = !!viewerEmail && entry.payerEmail === viewerEmail;
+  const viewerShare =
+    viewerEmail && !isViewerPayer
+      ? entry.participants.find((p) => p.email === viewerEmail) ?? null
+      : null;
+  const viewerShareSettled =
+    viewerShare?.status === "confirmed" || viewerShare?.status === "cash";
+
+  let personalLine: { text: string; tone: "saffron" | "moss" } | null = null;
+  if (kind === "open") {
+    if (isViewerPayer && pendingTotal > 0) {
+      personalLine = {
+        text: `₨${Math.round(pendingTotal).toLocaleString("en-PK")} pending`,
+        tone: "saffron",
+      };
+    } else if (viewerShare) {
+      personalLine = viewerShareSettled
+        ? {
+            text: `you paid ₨${Math.round(viewerShare.amountOwed).toLocaleString("en-PK")}`,
+            tone: "moss",
+          }
+        : {
+            text: `you owe ₨${Math.round(viewerShare.amountOwed).toLocaleString("en-PK")}`,
+            tone: "saffron",
+          };
+    }
+  }
 
   const dateBlock =
     kind === "closed" && entry.closedAt ? (
@@ -519,6 +703,15 @@ function BucketLine({
         <div className="text-[10px] text-ink-faint mt-0.5 font-mono tracking-wider">
           {dateBlock} · {entry.payerName} · {settled}
         </div>
+        {personalLine && (
+          <div
+            className={`text-[10px] mt-0.5 font-mono tracking-wider ${
+              personalLine.tone === "saffron" ? "text-saffron" : "text-moss"
+            }`}
+          >
+            {personalLine.text}
+          </div>
+        )}
       </div>
     </div>
   );
