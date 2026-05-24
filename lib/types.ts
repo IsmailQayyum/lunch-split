@@ -43,4 +43,14 @@ export type Ticket = {
   status: TicketStatus;
   createdAt: string;
   closedAt: string | null;
+  groupId: string | null;
+};
+
+export type Group = {
+  id: string;
+  name: string;
+  slackWebhookUrl: string | null;
+  memberEmails: string[];
+  createdBy: string;
+  createdAt: string;
 };

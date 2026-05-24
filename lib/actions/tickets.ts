@@ -139,6 +139,7 @@ export async function createTicketAction(input: unknown) {
     status: "open",
     createdAt: now,
     closedAt: null,
+    groupId: null,
   };
 
   await putTicket(ticket);
