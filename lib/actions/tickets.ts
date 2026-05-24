@@ -388,6 +388,28 @@ export async function reopenTicketAction(slug: string) {
   }
 }
 
+const setGroupSchema = z.object({
+  groupId: z.string().min(1).nullable(),
+});
+
+export async function setTicketGroupAction(slug: string, input: unknown) {
+  const { viewer, admin } = await requirePayer(slug);
+  const { groupId } = setGroupSchema.parse(input);
+  if (groupId) {
+    const group = await getGroup(groupId);
+    if (!group) throw new Error("group_not_found");
+    if (!admin && (!viewer || !group.memberEmails.includes(viewer.email))) {
+      throw new Error("not_group_member");
+    }
+  } else if (!admin) {
+    throw new Error("only_admin_can_unassign");
+  }
+  await updateTicket(slug, (t) => ({ ...t, groupId }));
+  revalidatePath(`/t/${slug}`);
+  revalidatePath("/groups");
+  if (groupId) revalidatePath(`/groups/${groupId}`);
+}
+
 export async function updateParticipantAmountAction(
   slug: string,
   participantId: string,
