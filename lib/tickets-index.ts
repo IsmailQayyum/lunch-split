@@ -22,6 +22,7 @@ export type IndexEntry = {
   participantCount: number;
   settledCount: number;
   participants: IndexParticipant[];
+  groupId: string | null;
 };
 
 function normalizeParticipant(p: Partial<IndexParticipant>): IndexParticipant {
@@ -49,6 +50,7 @@ function normalizeEntry(e: Partial<IndexEntry> & { slug: string }): IndexEntry {
     participants: Array.isArray(e.participants)
       ? e.participants.map((p) => normalizeParticipant(p as Partial<IndexParticipant>))
       : [],
+    groupId: typeof e.groupId === "string" ? e.groupId : null,
   };
 }
 
@@ -75,6 +77,7 @@ export function toIndexEntry(t: Ticket): IndexEntry {
       status: p.status,
       amountOwed: p.amountOwed,
     })),
+    groupId: t.groupId ?? null,
   };
 }
 

@@ -12,6 +12,11 @@ export async function SessionBar() {
           ◇ LUNCH SPLIT
         </Link>
         <div className="flex items-center gap-4">
+          {(v || admin) && (
+            <Link href="/groups" className="text-ink-faint hover:text-ink">
+              GROUPS
+            </Link>
+          )}
           {admin && (
             <Link
               href="/admin"
