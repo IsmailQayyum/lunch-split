@@ -145,6 +145,7 @@ export async function createTicketAction(input: unknown) {
   await putTicket(ticket);
   await notifySlack(
     `🍱 *${ticket.title}* — new lunch ticket\n₨ ${ticket.totalAmount.toLocaleString("en-PK")} · paid by ${ticket.payer.name} · ${ticket.participants.length} to settle\n${ticketUrl(slug)}`,
+    { groupId: ticket.groupId },
   );
   redirect(`/t/${slug}?created=1`);
 }
@@ -188,6 +189,7 @@ async function notifyAutoCloseIfFlipped(before: Ticket, after: Ticket) {
   if (before.status === "open" && after.status === "closed") {
     await notifySlack(
       `🎉 *${after.title}* — everyone settled\n₨ ${after.totalAmount.toLocaleString("en-PK")} collected · ${after.participants.length}/${after.participants.length} done\n${ticketUrl(after.slug)}`,
+      { groupId: after.groupId },
     );
   }
 }
@@ -207,6 +209,7 @@ export async function markPaidAction(slug: string, participantId: string) {
   if (beforeP && beforeP.status !== participant.status) {
     await notifySlack(
       `🟡 *${participant.name}* marked paid on *${after.title}*\n₨ ${participant.amountOwed.toLocaleString("en-PK")} · awaiting ${after.payer.name}'s confirmation`,
+      { groupId: after.groupId },
     );
   }
 }
@@ -221,6 +224,7 @@ export async function confirmPaidAction(slug: string, participantId: string) {
   if (beforeP && beforeP.status !== participant.status) {
     await notifySlack(
       `✅ *${participant.name}* settled on *${after.title}*\n₨ ${participant.amountOwed.toLocaleString("en-PK")} · ${settledOf(after)}/${after.participants.length} done`,
+      { groupId: after.groupId },
     );
   }
   await notifyAutoCloseIfFlipped(before, after);
@@ -237,6 +241,7 @@ export async function markCashAction(slug: string, participantId: string) {
   if (beforeP && beforeP.status !== "cash") {
     await notifySlack(
       `💵 *${participant.name}* paid cash on *${after.title}*\n₨ ${participant.amountOwed.toLocaleString("en-PK")} · ${settledOf(after)}/${after.participants.length} done`,
+      { groupId: after.groupId },
     );
   }
   await notifyAutoCloseIfFlipped(before, after);
@@ -316,6 +321,7 @@ export async function closeTicketAction(slug: string) {
   if (wasOpen) {
     await notifySlack(
       `🔒 *${after.title}* closed by *${after.payer.name}*\n${settledOf(after)}/${after.participants.length} settled at close\n${ticketUrl(after.slug)}`,
+      { groupId: after.groupId },
     );
   }
 }
@@ -368,6 +374,7 @@ export async function reopenTicketAction(slug: string) {
   if (wasClosed) {
     await notifySlack(
       `🔓 *${after.title}* reopened by *${after.payer.name}*\n${ticketUrl(after.slug)}`,
+      { groupId: after.groupId },
     );
   }
 }
