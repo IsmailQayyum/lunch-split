@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { NewTicketForm } from "./NewTicketForm";
 import { getRoster, claimAccountByEmail } from "@/lib/store-roster";
+import { getGroups } from "@/lib/store-groups";
 import { requireViewer } from "@/lib/auth";
+import { isAdmin } from "@/lib/admin";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +16,14 @@ export default async function NewTicketPage({
   // Ensure the viewer has a Person row (covers the case where login created
   // an entry but the user later removed it).
   const me = viewer.person ?? (await claimAccountByEmail(viewer.email));
-  const roster = await getRoster();
+  const [roster, allGroups, admin] = await Promise.all([
+    getRoster(),
+    getGroups(),
+    isAdmin(),
+  ]);
+  const visibleGroups = admin
+    ? allGroups
+    : allGroups.filter((g) => g.memberEmails.includes(viewer.email));
   const sp = await searchParams;
   const fromSlack = sp.from === "slack";
   return (
@@ -41,12 +50,26 @@ export default async function NewTicketPage({
         </p>
       </header>
       <div className="divider-dots mb-8" />
-      <NewTicketForm
-        roster={roster}
-        payer={me}
-        initialTitle={sp.title ?? ""}
-        initialTotal={sp.total ?? ""}
-      />
+      {visibleGroups.length === 0 ? (
+        <div className="border-2 border-dashed border-saffron/60 p-6 text-center space-y-3">
+          <div className="eyebrow text-saffron">NO GROUPS YET</div>
+          <p className="text-[13px] text-ink-soft">
+            Every bill belongs to a group. Create one first to pick the people
+            it&apos;s shared with and the Slack channel that hears about it.
+          </p>
+          <Link href="/groups" className="ink-link eyebrow inline-block">
+            CREATE A GROUP →
+          </Link>
+        </div>
+      ) : (
+        <NewTicketForm
+          roster={roster}
+          payer={me}
+          groups={visibleGroups}
+          initialTitle={sp.title ?? ""}
+          initialTotal={sp.total ?? ""}
+        />
+      )}
     </main>
   );
 }

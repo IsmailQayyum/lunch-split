@@ -10,6 +10,7 @@ import { splitEvenly } from "@/lib/shares";
 import { sendReminderEmail } from "@/lib/email";
 import { notifySlack, ticketUrl } from "@/lib/slack-notify";
 import { getTicket, putTicket, updateTicket, deleteTicket } from "@/lib/store";
+import { getGroup } from "@/lib/store-groups";
 import type { Participant, Ticket, ParticipantStatus } from "@/lib/types";
 import { requireViewer, getViewer, isPayer as viewerIsPayer, isSelf } from "@/lib/auth";
 import { isAdmin } from "@/lib/admin";
@@ -83,17 +84,25 @@ const createTicketSchema = z.object({
   }),
   participants: z.array(participantInputSchema).min(1),
   splitMode: z.enum(["even", "custom"]),
+  groupId: z.string().min(1),
 });
 
 export async function createTicketAction(input: unknown) {
   const data = createTicketSchema.parse(input);
-  const { viewer } = await requireViewerOrAdmin();
+  const { viewer, admin } = await requireViewerOrAdmin();
   if (viewer) {
     // Pin payer.email to the viewer (defense against client tampering).
     data.payer.email = viewer.email;
   } else if (!data.payer.email) {
     // Admin without a session must supply a payer email in the form.
     throw new Error("payer_email_required");
+  }
+
+  const group = await getGroup(data.groupId);
+  if (!group) throw new Error("group_not_found");
+  const payerEmail = (data.payer.email ?? "").toLowerCase();
+  if (!admin && !group.memberEmails.includes(payerEmail)) {
+    throw new Error("not_group_member");
   }
 
   let shares: number[];
@@ -139,7 +148,7 @@ export async function createTicketAction(input: unknown) {
     status: "open",
     createdAt: now,
     closedAt: null,
-    groupId: null,
+    groupId: group.id,
   };
 
   await putTicket(ticket);
