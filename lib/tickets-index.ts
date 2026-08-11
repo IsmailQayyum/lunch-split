@@ -22,6 +22,7 @@ export type IndexEntry = {
   participantCount: number;
   settledCount: number;
   participants: IndexParticipant[];
+  groupId: string | null;
 };
 
 function normalizeParticipant(p: Partial<IndexParticipant>): IndexParticipant {
@@ -49,6 +50,7 @@ function normalizeEntry(e: Partial<IndexEntry> & { slug: string }): IndexEntry {
     participants: Array.isArray(e.participants)
       ? e.participants.map((p) => normalizeParticipant(p as Partial<IndexParticipant>))
       : [],
+    groupId: typeof e.groupId === "string" ? e.groupId : null,
   };
 }
 
@@ -75,6 +77,7 @@ export function toIndexEntry(t: Ticket): IndexEntry {
       status: p.status,
       amountOwed: p.amountOwed,
     })),
+    groupId: t.groupId ?? null,
   };
 }
 
@@ -148,7 +151,7 @@ export async function removeIndexEntry(slug: string): Promise<void> {
 // Bump when IndexEntry/IndexParticipant gains a field that older entries
 // won't carry — ensureIndexFresh() will scan ticket:* and rewrite the
 // index once, then short-circuit on subsequent reads.
-const INDEX_VERSION = 2;
+const INDEX_VERSION = 3;
 const VERSION_KEY = "tickets:index:version";
 const TICKET_KEY_PREFIX = "ticket:";
 
@@ -168,7 +171,7 @@ async function rebuildIndexFromTickets(): Promise<void> {
       try {
         const ticket = JSON.parse(raw) as Ticket;
         if (!ticket?.slug) continue;
-        entries.push(toIndexEntry(ticket));
+        entries.push(toIndexEntry({ ...ticket, groupId: ticket.groupId ?? null }));
       } catch {
         // skip corrupted blob
       }

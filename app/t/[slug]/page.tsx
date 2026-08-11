@@ -38,10 +38,12 @@ export async function generateMetadata({
   };
 }
 import { findPersonByEmail, getRoster } from "@/lib/store-roster";
+import { getGroups } from "@/lib/store-groups";
 import { slackShareText, shortShareText } from "@/lib/share-text";
 import type { PayerProfile } from "@/lib/types";
 import { getViewer, isPayer as viewerIsPayer } from "@/lib/auth";
 import { isAdmin } from "@/lib/admin";
+import { TicketGroupPicker } from "@/components/TicketGroupPicker";
 import { PaymentMethodsPanel } from "@/components/PaymentMethodsPanel";
 import { ParticipantRow } from "@/components/ParticipantRow";
 import { CloseTicketButton } from "@/components/CloseTicketButton";
@@ -98,7 +100,12 @@ export default async function TicketPage({
   // Pull the payer's *current* payment methods from the roster so updates
   // there reflect on every ticket they're paying. Fall back to the snapshot
   // taken when the ticket was created if they're no longer in the roster.
-  const roster = await getRoster();
+  const [roster, allGroups] = await Promise.all([getRoster(), getGroups()]);
+  const visibleGroups = admin
+    ? allGroups
+    : viewer
+      ? allGroups.filter((g) => g.memberEmails.includes(viewer.email))
+      : [];
   const liveMatch = findPersonByEmail(roster, ticket.payer.email);
   const effectivePayer: PayerProfile = liveMatch
     ? {
@@ -323,6 +330,18 @@ export default async function TicketPage({
           </div>
           <div className="divider-dots my-8" />
         </>
+      )}
+
+      {/* Group assignment (payer or admin) */}
+      {isPayer && visibleGroups.length > 0 && (
+        <div className="mb-8">
+          <TicketGroupPicker
+            slug={slug}
+            currentGroupId={ticket.groupId}
+            groups={visibleGroups}
+            canUnassign={admin}
+          />
+        </div>
       )}
 
       {/* Close ticket */}

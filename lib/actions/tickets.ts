@@ -10,6 +10,7 @@ import { splitEvenly } from "@/lib/shares";
 import { sendReminderEmail } from "@/lib/email";
 import { notifySlack, ticketUrl } from "@/lib/slack-notify";
 import { getTicket, putTicket, updateTicket, deleteTicket } from "@/lib/store";
+import { getGroup } from "@/lib/store-groups";
 import type { Participant, Ticket, ParticipantStatus } from "@/lib/types";
 import { requireViewer, getViewer, isPayer as viewerIsPayer, isSelf } from "@/lib/auth";
 import { isAdmin } from "@/lib/admin";
@@ -83,17 +84,25 @@ const createTicketSchema = z.object({
   }),
   participants: z.array(participantInputSchema).min(1),
   splitMode: z.enum(["even", "custom"]),
+  groupId: z.string().min(1),
 });
 
 export async function createTicketAction(input: unknown) {
   const data = createTicketSchema.parse(input);
-  const { viewer } = await requireViewerOrAdmin();
+  const { viewer, admin } = await requireViewerOrAdmin();
   if (viewer) {
     // Pin payer.email to the viewer (defense against client tampering).
     data.payer.email = viewer.email;
   } else if (!data.payer.email) {
     // Admin without a session must supply a payer email in the form.
     throw new Error("payer_email_required");
+  }
+
+  const group = await getGroup(data.groupId);
+  if (!group) throw new Error("group_not_found");
+  const payerEmail = (data.payer.email ?? "").toLowerCase();
+  if (!admin && !group.memberEmails.includes(payerEmail)) {
+    throw new Error("not_group_member");
   }
 
   let shares: number[];
@@ -139,11 +148,13 @@ export async function createTicketAction(input: unknown) {
     status: "open",
     createdAt: now,
     closedAt: null,
+    groupId: group.id,
   };
 
   await putTicket(ticket);
   await notifySlack(
     `🍱 *${ticket.title}* — new lunch ticket\n₨ ${ticket.totalAmount.toLocaleString("en-PK")} · paid by ${ticket.payer.name} · ${ticket.participants.length} to settle\n${ticketUrl(slug)}`,
+    { groupId: ticket.groupId },
   );
   redirect(`/t/${slug}?created=1`);
 }
@@ -187,6 +198,7 @@ async function notifyAutoCloseIfFlipped(before: Ticket, after: Ticket) {
   if (before.status === "open" && after.status === "closed") {
     await notifySlack(
       `🎉 *${after.title}* — everyone settled\n₨ ${after.totalAmount.toLocaleString("en-PK")} collected · ${after.participants.length}/${after.participants.length} done\n${ticketUrl(after.slug)}`,
+      { groupId: after.groupId },
     );
   }
 }
@@ -206,6 +218,7 @@ export async function markPaidAction(slug: string, participantId: string) {
   if (beforeP && beforeP.status !== participant.status) {
     await notifySlack(
       `🟡 *${participant.name}* marked paid on *${after.title}*\n₨ ${participant.amountOwed.toLocaleString("en-PK")} · awaiting ${after.payer.name}'s confirmation`,
+      { groupId: after.groupId },
     );
   }
 }
@@ -220,6 +233,7 @@ export async function confirmPaidAction(slug: string, participantId: string) {
   if (beforeP && beforeP.status !== participant.status) {
     await notifySlack(
       `✅ *${participant.name}* settled on *${after.title}*\n₨ ${participant.amountOwed.toLocaleString("en-PK")} · ${settledOf(after)}/${after.participants.length} done`,
+      { groupId: after.groupId },
     );
   }
   await notifyAutoCloseIfFlipped(before, after);
@@ -236,6 +250,7 @@ export async function markCashAction(slug: string, participantId: string) {
   if (beforeP && beforeP.status !== "cash") {
     await notifySlack(
       `💵 *${participant.name}* paid cash on *${after.title}*\n₨ ${participant.amountOwed.toLocaleString("en-PK")} · ${settledOf(after)}/${after.participants.length} done`,
+      { groupId: after.groupId },
     );
   }
   await notifyAutoCloseIfFlipped(before, after);
@@ -315,6 +330,7 @@ export async function closeTicketAction(slug: string) {
   if (wasOpen) {
     await notifySlack(
       `🔒 *${after.title}* closed by *${after.payer.name}*\n${settledOf(after)}/${after.participants.length} settled at close\n${ticketUrl(after.slug)}`,
+      { groupId: after.groupId },
     );
   }
 }
@@ -367,8 +383,31 @@ export async function reopenTicketAction(slug: string) {
   if (wasClosed) {
     await notifySlack(
       `🔓 *${after.title}* reopened by *${after.payer.name}*\n${ticketUrl(after.slug)}`,
+      { groupId: after.groupId },
     );
   }
+}
+
+const setGroupSchema = z.object({
+  groupId: z.string().min(1).nullable(),
+});
+
+export async function setTicketGroupAction(slug: string, input: unknown) {
+  const { viewer, admin } = await requirePayer(slug);
+  const { groupId } = setGroupSchema.parse(input);
+  if (groupId) {
+    const group = await getGroup(groupId);
+    if (!group) throw new Error("group_not_found");
+    if (!admin && (!viewer || !group.memberEmails.includes(viewer.email))) {
+      throw new Error("not_group_member");
+    }
+  } else if (!admin) {
+    throw new Error("only_admin_can_unassign");
+  }
+  await updateTicket(slug, (t) => ({ ...t, groupId }));
+  revalidatePath(`/t/${slug}`);
+  revalidatePath("/groups");
+  if (groupId) revalidatePath(`/groups/${groupId}`);
 }
 
 export async function updateParticipantAmountAction(

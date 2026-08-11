@@ -14,11 +14,16 @@ export async function deleteTicket(slug: string): Promise<void> {
   }
 }
 
+function normalizeTicket(t: Ticket): Ticket {
+  // Older tickets predate the groups feature and won't have groupId.
+  return { ...t, groupId: t.groupId ?? null };
+}
+
 export async function getTicket(slug: string): Promise<Ticket | null> {
   const raw = await redis.get<string>(keyTicket(slug));
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as Ticket;
+    return normalizeTicket(JSON.parse(raw) as Ticket);
   } catch {
     return null;
   }
@@ -48,7 +53,7 @@ export async function updateTicket(
 
     let current: Ticket;
     try {
-      current = JSON.parse(currentRaw) as Ticket;
+      current = normalizeTicket(JSON.parse(currentRaw) as Ticket);
     } catch {
       throw new Error("Ticket corrupted");
     }

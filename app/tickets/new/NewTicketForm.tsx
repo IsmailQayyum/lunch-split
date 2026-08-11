@@ -9,20 +9,24 @@ import { PersonPicker } from "@/components/PersonPicker";
 import { createTicketAction } from "@/lib/actions/tickets";
 import { splitEvenly } from "@/lib/shares";
 import type { Person } from "@/lib/store-roster";
+import type { Group } from "@/lib/types";
 
 export function NewTicketForm({
   roster: initialRoster,
   payer,
+  groups,
   initialTitle = "",
   initialTotal = "",
 }: {
   roster: Person[];
   payer: Person;
+  groups: Group[];
   initialTitle?: string;
   initialTotal?: string;
 }) {
   const [roster, setRoster] = useState(initialRoster);
 
+  const [groupId, setGroupId] = useState<string>(groups.length === 1 ? groups[0].id : "");
   const [title, setTitle] = useState(initialTitle);
   const [total, setTotal] = useState(initialTotal);
   const [notes, setNotes] = useState("");
@@ -31,6 +35,12 @@ export function NewTicketForm({
   const [customAmounts, setCustomAmounts] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+
+  const activeGroup = useMemo(
+    () => groups.find((g) => g.id === groupId) ?? null,
+    [groups, groupId],
+  );
+  const allowedEmails = activeGroup ? activeGroup.memberEmails : null;
 
   const totalNum = Math.round(Number(total) || 0);
   const selected = useMemo(
@@ -58,6 +68,7 @@ export function NewTicketForm({
 
   function submit() {
     setError(null);
+    if (!groupId) return setError("Pick a group for this bill.");
     if (!title.trim()) return setError("What did you eat? Give it a title.");
     if (!totalNum) return setError("Bill total needs a number.");
     if (selected.length === 0) return setError("Pick at least one person.");
@@ -105,6 +116,7 @@ export function NewTicketForm({
           },
           participants,
           splitMode,
+          groupId,
         });
       } catch (e) {
         setError((e as Error).message);
@@ -116,6 +128,44 @@ export function NewTicketForm({
 
   return (
     <div className="space-y-10 stagger">
+      {/* GROUP */}
+      <section>
+        <div className="eyebrow mb-4 text-saffron">§ 00 · GROUP *</div>
+        <div className="space-y-2">
+          <Label>WHICH GROUP IS THIS FOR?</Label>
+          <select
+            value={groupId}
+            onChange={(e) => {
+              setGroupId(e.target.value);
+              // Drop any picks that aren't in the new group.
+              const next = groups.find((g) => g.id === e.target.value);
+              if (next) {
+                setSelectedIds((s) =>
+                  s.filter((id) => {
+                    const p = roster.find((x) => x.id === id);
+                    return !!p?.email && next.memberEmails.includes(p.email.toLowerCase());
+                  }),
+                );
+              }
+            }}
+            className="w-full border-[1.5px] border-ink bg-paper px-3 py-2 text-[15px] font-mono"
+          >
+            <option value="">— pick a group —</option>
+            {groups.map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name}
+                {g.slackWebhookUrl ? "  · Slack on" : "  · silent"}
+              </option>
+            ))}
+          </select>
+          <p className="text-[11px] text-ink-faint">
+            Only this group&apos;s Slack channel hears about the bill.
+          </p>
+        </div>
+      </section>
+
+      <div className="divider-dots" />
+
       {/* PAYER (you) */}
       <section>
         <div className="eyebrow mb-4 text-saffron">§ 01 · WHO PAID</div>
@@ -197,6 +247,7 @@ export function NewTicketForm({
           selectedIds={selectedIds}
           onToggle={togglePerson}
           onAdded={onPersonAdded}
+          allowedEmails={allowedEmails}
         />
 
         {selected.length > 0 && (

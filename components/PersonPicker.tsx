@@ -12,9 +12,16 @@ type Props = {
   selectedIds: string[];
   onToggle: (id: string) => void;
   onAdded: (person: Person) => void;
+  allowedEmails?: string[] | null;
 };
 
-export function PersonPicker({ roster, selectedIds, onToggle, onAdded }: Props) {
+export function PersonPicker({
+  roster,
+  selectedIds,
+  onToggle,
+  onAdded,
+  allowedEmails,
+}: Props) {
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [name, setName] = useState("");
@@ -45,6 +52,12 @@ export function PersonPicker({ roster, selectedIds, onToggle, onAdded }: Props) 
   }
 
   const selected = roster.filter((p) => selectedIds.includes(p.id));
+  const visibleRoster = allowedEmails
+    ? roster.filter((p) => {
+        if (selectedIds.includes(p.id)) return true;
+        return !!p.email && allowedEmails.includes(p.email.toLowerCase());
+      })
+    : roster;
 
   return (
     <div className="space-y-3">
@@ -73,15 +86,17 @@ export function PersonPicker({ roster, selectedIds, onToggle, onAdded }: Props) 
       {/* Inline expansion — pushes everything below it down */}
       {open && (
         <div className="border-[1.5px] border-ink bg-paper-light shadow-md animate-fade-up">
-          {roster.length === 0 && !adding && (
+          {visibleRoster.length === 0 && !adding && (
             <div className="text-[12px] text-ink-soft italic text-center py-6 px-3">
-              No saved people yet. Add the lunch crew below.
+              {allowedEmails
+                ? "No group members in the roster yet. Add someone below."
+                : "No saved people yet. Add the lunch crew below."}
             </div>
           )}
 
-          {roster.length > 0 && (
+          {visibleRoster.length > 0 && (
             <ul className="max-h-72 overflow-y-auto scroll-fade">
-              {roster.map((p) => {
+              {visibleRoster.map((p) => {
                 const on = selectedIds.includes(p.id);
                 return (
                   <li
