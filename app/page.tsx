@@ -3,6 +3,7 @@ import { readIndexOrRebuild } from "@/lib/tickets-index";
 import DashboardFilter from "@/components/DashboardFilter";
 import { getViewer } from "@/lib/auth";
 import { isAdmin } from "@/lib/admin";
+import { isSettled } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export default async function Home() {
       let entryYouOwe = 0;
       let entryOwedToYou = 0;
       for (const p of e.participants) {
-        const pending = p.status !== "confirmed" && p.status !== "cash";
+        const pending = !isSettled(p.status);
         if (!pending) continue;
         if (isPayer) entryOwedToYou += p.amountOwed;
         else if (p.email === viewer.email) entryYouOwe += p.amountOwed;

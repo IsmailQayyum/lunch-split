@@ -52,7 +52,7 @@ async function requireSelfForParticipant(slug: string, participantId: string) {
 }
 
 function settledOf(t: Ticket): number {
-  return t.participants.filter((p) => p.status === "confirmed" || p.status === "cash").length;
+  return t.participants.filter((p) => isSettled(p.status)).length;
 }
 
 const newParticipantId = customAlphabet("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 12);
@@ -167,7 +167,7 @@ function findParticipant(t: Ticket, id: string): Participant {
 
 function autoCloseIfDone(t: Ticket): Ticket {
   if (t.participants.length === 0) return t;
-  const allDone = t.participants.every((p) => p.status === "confirmed" || p.status === "cash");
+  const allDone = t.participants.every((p) => isSettled(p.status));
   if (allDone && t.status === "open") {
     return { ...t, status: "closed", closedAt: new Date().toISOString() };
   }
@@ -209,7 +209,7 @@ export async function markPaidAction(slug: string, participantId: string) {
     slug,
     participantId,
     (p) => {
-      if (p.status === "confirmed" || p.status === "cash") return p;
+      if (isSettled(p.status)) return p;
       return { ...p, status: "self_marked", selfMarkedAt: new Date().toISOString() };
     },
     false,
@@ -226,7 +226,7 @@ export async function markPaidAction(slug: string, participantId: string) {
 export async function confirmPaidAction(slug: string, participantId: string) {
   await requirePayer(slug);
   const { before, after, participant } = await mutateParticipant(slug, participantId, (p) => {
-    if (p.status === "confirmed" || p.status === "cash") return p;
+    if (isSettled(p.status)) return p;
     return { ...p, status: "confirmed", confirmedAt: new Date().toISOString() };
   });
   const beforeP = before.participants.find((x) => x.id === participantId);
@@ -279,7 +279,7 @@ export async function remindEmailAction(slug: string, participantId: string) {
   const t = await getTicket(slug);
   if (!t) throw new Error("Ticket not found");
   const p = findParticipant(t, participantId);
-  if (p.status === "confirmed" || p.status === "cash") throw new Error("Already settled");
+  if (isSettled(p.status)) throw new Error("Already settled");
   if (!p.email) throw new Error("No email on file for this participant");
 
   // Rate-limit: 1 email reminder per participant per hour

@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 
 import { getTicket } from "@/lib/store";
+import { isSettled } from "@/lib/types";
 
 export async function generateMetadata({
   params,
@@ -12,9 +13,7 @@ export async function generateMetadata({
   const { slug } = await params;
   const ticket = await getTicket(slug);
   if (!ticket) return { title: "Ticket not found · Lunch Split" };
-  const settled = ticket.participants.filter(
-    (p) => p.status === "confirmed" || p.status === "cash",
-  ).length;
+  const settled = ticket.participants.filter((p) => isSettled(p.status)).length;
   const total = ticket.participants.length;
   const names = ticket.participants.map((p) => p.name);
   const namesList = names.length > 0 ? names.join(", ") : "no participants yet";
