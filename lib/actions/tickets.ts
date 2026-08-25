@@ -11,7 +11,7 @@ import { sendReminderEmail } from "@/lib/email";
 import { notifySlack, ticketUrl } from "@/lib/slack-notify";
 import { getTicket, putTicket, updateTicket, deleteTicket } from "@/lib/store";
 import { getGroup } from "@/lib/store-groups";
-import type { Participant, Ticket, ParticipantStatus } from "@/lib/types";
+import { isSettled, type Participant, type Ticket, type ParticipantStatus } from "@/lib/types";
 import { requireViewer, getViewer, isPayer as viewerIsPayer, isSelf } from "@/lib/auth";
 import { isAdmin } from "@/lib/admin";
 
@@ -370,6 +370,180 @@ export async function bulkDeleteTicketsAction(
   }
   revalidatePath("/");
   return { deleted, skipped };
+}
+
+export async function bulkConfirmSharesAction(
+  items: { slug: string; email: string }[],
+): Promise<{ confirmed: number; skipped: number }> {
+  const { viewer, admin } = await requireViewerOrAdmin();
+  if (!Array.isArray(items) || items.length === 0) return { confirmed: 0, skipped: 0 };
+
+  // Dedupe (slug, email) pairs, cap 200, then group by slug so each ticket
+  // is a single CAS pass regardless of how many shares it settles.
+  const bySlug = new Map<string, Set<string>>();
+  let pairs = 0;
+  for (const item of items) {
+    const slug = typeof item?.slug === "string" ? item.slug : "";
+    const email = typeof item?.email === "string" ? item.email.toLowerCase() : "";
+    if (!slug || !email) continue;
+    const emails = bySlug.get(slug) ?? new Set<string>();
+    if (!emails.has(email)) {
+      if (pairs >= 200) break;
+      emails.add(email);
+      pairs++;
+    }
+    bySlug.set(slug, emails);
+  }
+
+  let confirmed = 0;
+  let skipped = 0;
+  type GroupSummary = {
+    payerName: string;
+    personNames: Set<string>;
+    total: number;
+    count: number;
+    slugs: Set<string>;
+    closedTitles: string[];
+  };
+  const byGroup = new Map<string | null, GroupSummary>();
+
+  for (const [slug, emails] of bySlug) {
+    try {
+      const t = await getTicket(slug);
+      if (!t || (!admin && !viewerIsPayer(viewer, t.payer.email))) {
+        skipped += emails.size;
+        continue;
+      }
+      let before!: Ticket;
+      const now = new Date().toISOString();
+      const after = await updateTicket(slug, (cur) => {
+        before = cur;
+        const updated = {
+          ...cur,
+          participants: cur.participants.map((p) =>
+            p.email && emails.has(p.email.toLowerCase()) && !isSettled(p.status)
+              ? { ...p, status: "confirmed" as const, confirmedAt: now }
+              : p,
+          ),
+        };
+        return autoCloseIfDone(updated);
+      });
+      revalidatePath(`/t/${slug}`);
+
+      const flipped = after.participants.filter((p, i) => p.status !== before.participants[i]?.status);
+      const flippedEmails = new Set(flipped.map((p) => (p.email ?? "").toLowerCase()));
+      confirmed += flipped.length;
+      // Requested emails that matched nothing unsettled on this ticket.
+      skipped += Array.from(emails).filter((e) => !flippedEmails.has(e)).length;
+      if (flipped.length === 0) continue;
+
+      const summary = byGroup.get(after.groupId) ?? {
+        payerName: after.payer.name,
+        personNames: new Set<string>(),
+        total: 0,
+        count: 0,
+        slugs: new Set<string>(),
+        closedTitles: [],
+      };
+      for (const p of flipped) {
+        summary.personNames.add(p.name);
+        summary.total += p.amountOwed;
+        summary.count++;
+      }
+      summary.slugs.add(slug);
+      if (before.status === "open" && after.status === "closed") summary.closedTitles.push(after.title);
+      byGroup.set(after.groupId, summary);
+    } catch (e) {
+      console.error(`bulk confirm failed for ${slug}:`, e);
+      skipped += emails.size;
+    }
+  }
+
+  // One aggregated message per group instead of one per ticket.
+  for (const [groupId, s] of byGroup) {
+    const names = Array.from(s.personNames).join(", ");
+    const tickets = s.slugs.size;
+    let text = `✅ *${s.payerName}* confirmed ${s.count} payment${s.count === 1 ? "" : "s"} from *${names}* — ₨ ${s.total.toLocaleString("en-PK")} across ${tickets} ticket${tickets === 1 ? "" : "s"}`;
+    if (s.closedTitles.length > 0) {
+      text += `\n🎉 fully settled: ${s.closedTitles.join(", ")}`;
+    }
+    await notifySlack(text, { groupId });
+  }
+
+  revalidatePath("/");
+  revalidatePath("/balances");
+  return { confirmed, skipped };
+}
+
+export async function bulkMarkPaidAction(
+  slugs: string[],
+): Promise<{ marked: number; skipped: number }> {
+  const { viewer } = await requireViewerOrAdmin();
+  if (!viewer) throw new Error("admin_no_self");
+  if (!Array.isArray(slugs) || slugs.length === 0) return { marked: 0, skipped: 0 };
+  const targets = Array.from(new Set(slugs.filter((s) => typeof s === "string" && s))).slice(0, 200);
+
+  let marked = 0;
+  let skipped = 0;
+  type GroupSummary = { personName: string; payerNames: Set<string>; total: number; count: number };
+  const byGroup = new Map<string | null, GroupSummary>();
+
+  for (const slug of targets) {
+    try {
+      const t = await getTicket(slug);
+      if (!t) {
+        skipped++;
+        continue;
+      }
+      let before!: Ticket;
+      const now = new Date().toISOString();
+      // Only the viewer's own pending shares; self_marked stays untouched and
+      // there is no autoClose, matching markPaidAction.
+      const after = await updateTicket(slug, (cur) => {
+        before = cur;
+        return {
+          ...cur,
+          participants: cur.participants.map((p) =>
+            (p.email ?? "").toLowerCase() === viewer.email && p.status === "pending"
+              ? { ...p, status: "self_marked" as const, selfMarkedAt: now }
+              : p,
+          ),
+        };
+      });
+      revalidatePath(`/t/${slug}`);
+
+      const flipped = after.participants.filter((p, i) => p.status !== before.participants[i]?.status);
+      if (flipped.length === 0) {
+        skipped++;
+        continue;
+      }
+      marked += flipped.length;
+      const summary = byGroup.get(after.groupId) ?? {
+        personName: flipped[0].name,
+        payerNames: new Set<string>(),
+        total: 0,
+        count: 0,
+      };
+      summary.payerNames.add(after.payer.name);
+      summary.total += flipped.reduce((a, p) => a + p.amountOwed, 0);
+      summary.count += flipped.length;
+      byGroup.set(after.groupId, summary);
+    } catch (e) {
+      console.error(`bulk mark paid failed for ${slug}:`, e);
+      skipped++;
+    }
+  }
+
+  for (const [groupId, s] of byGroup) {
+    await notifySlack(
+      `🟡 *${s.personName}* marked ${s.count} payment${s.count === 1 ? "" : "s"} paid — ₨ ${s.total.toLocaleString("en-PK")} · awaiting ${Array.from(s.payerNames).join(", ")}'s confirmation`,
+      { groupId },
+    );
+  }
+
+  revalidatePath("/");
+  revalidatePath("/balances");
+  return { marked, skipped };
 }
 
 export async function reopenTicketAction(slug: string) {
