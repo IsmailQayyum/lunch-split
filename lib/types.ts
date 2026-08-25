@@ -1,6 +1,10 @@
 import type { WalletApp } from "./store-roster";
 
 export type ParticipantStatus = "pending" | "self_marked" | "confirmed" | "cash";
+
+export function isSettled(status: ParticipantStatus): boolean {
+  return status === "confirmed" || status === "cash";
+}
 export type TicketStatus = "open" | "closed";
 
 export type Participant = {

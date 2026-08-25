@@ -3,6 +3,7 @@
 import { useEffect, useState, useTransition } from "react";
 import { Button } from "./ui/button";
 import { normalizeWhatsapp, whatsappUrl, reminderText } from "@/lib/whatsapp";
+import { isSettled } from "@/lib/types";
 import {
   markPaidAction,
   confirmPaidAction,
@@ -152,7 +153,7 @@ export function ParticipantRow({
   }, [localStatus, slug, participant.id]);
 
   const status = localStatus ?? participant.status;
-  const settled = status === "confirmed" || status === "cash";
+  const settled = isSettled(status);
   const waNumber = normalizeWhatsapp(participant.whatsapp);
 
   const isMyRow =

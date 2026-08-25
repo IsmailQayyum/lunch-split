@@ -13,9 +13,14 @@ export async function SessionBar() {
         </Link>
         <div className="flex items-center gap-4">
           {(v || admin) && (
-            <Link href="/groups" className="text-ink-faint hover:text-ink">
-              GROUPS
-            </Link>
+            <>
+              <Link href="/balances" className="text-ink-faint hover:text-ink">
+                BALANCES
+              </Link>
+              <Link href="/groups" className="text-ink-faint hover:text-ink">
+                GROUPS
+              </Link>
+            </>
           )}
           {admin && (
             <Link

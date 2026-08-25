@@ -3,6 +3,7 @@
 import { useState, useMemo, useTransition } from "react";
 import Link from "next/link";
 import type { IndexEntry } from "@/lib/tickets-index";
+import { isSettled } from "@/lib/types";
 import { bulkDeleteTicketsAction } from "@/lib/actions/tickets";
 
 type Props = {
@@ -103,7 +104,7 @@ export default function DashboardFilter({
     !!viewerEmail && e.payerEmail === viewerEmail;
   const viewerSettledOn = (e: IndexEntry) => {
     const p = viewerParticipantOf(e);
-    return p?.status === "confirmed" || p?.status === "cash";
+    return !!p && isSettled(p.status);
   };
 
   const toPay = loggedIn
@@ -123,7 +124,7 @@ export default function DashboardFilter({
 
   const stillOwed = open.reduce((s, e) => {
     const pendingTotal = e.participants
-      .filter((p) => p.status !== "confirmed" && p.status !== "cash")
+      .filter((p) => !isSettled(p.status))
       .reduce((x, p) => x + p.amountOwed, 0);
     if (pendingTotal === 0 && e.participants.length === 0) {
       return (
@@ -608,12 +609,8 @@ function BucketLine({
   const settled = `${entry.settledCount}/${entry.participantCount}`;
   const pendingCount = entry.participantCount - entry.settledCount;
 
-  const paid = entry.participants.filter(
-    (p) => p.status === "confirmed" || p.status === "cash",
-  );
-  const pending = entry.participants.filter(
-    (p) => p.status !== "confirmed" && p.status !== "cash",
-  );
+  const paid = entry.participants.filter((p) => isSettled(p.status));
+  const pending = entry.participants.filter((p) => !isSettled(p.status));
   const paidTotal = paid.reduce((s, p) => s + p.amountOwed, 0);
   const pendingTotal = pending.reduce((s, p) => s + p.amountOwed, 0);
 
@@ -622,8 +619,7 @@ function BucketLine({
     viewerEmail && !isViewerPayer
       ? entry.participants.find((p) => p.email === viewerEmail) ?? null
       : null;
-  const viewerShareSettled =
-    viewerShare?.status === "confirmed" || viewerShare?.status === "cash";
+  const viewerShareSettled = !!viewerShare && isSettled(viewerShare.status);
 
   let personalLine: { text: string; tone: "saffron" | "moss" } | null = null;
   if (kind === "open") {

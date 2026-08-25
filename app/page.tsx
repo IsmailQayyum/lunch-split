@@ -3,6 +3,7 @@ import { readIndexOrRebuild } from "@/lib/tickets-index";
 import DashboardFilter from "@/components/DashboardFilter";
 import { getViewer } from "@/lib/auth";
 import { isAdmin } from "@/lib/admin";
+import { isSettled } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +49,7 @@ export default async function Home() {
       let entryYouOwe = 0;
       let entryOwedToYou = 0;
       for (const p of e.participants) {
-        const pending = p.status !== "confirmed" && p.status !== "cash";
+        const pending = !isSettled(p.status);
         if (!pending) continue;
         if (isPayer) entryOwedToYou += p.amountOwed;
         else if (p.email === viewer.email) entryYouOwe += p.amountOwed;
@@ -87,6 +88,9 @@ export default async function Home() {
         </Link>
         <p className="eyebrow mt-3">Takes ~ 20 SECONDS</p>
         <div className="mt-6 flex flex-col items-center gap-2">
+          <Link href="/balances" className="eyebrow ink-link">
+            ⋯ BALANCES BY PERSON →
+          </Link>
           <Link href="/people" className="eyebrow ink-link">
             ⋯ MANAGE THE LUNCH ROSTER →
           </Link>

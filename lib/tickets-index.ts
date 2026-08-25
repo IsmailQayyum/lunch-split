@@ -1,5 +1,5 @@
 import "server-only";
-import type { Ticket, ParticipantStatus } from "./types";
+import { isSettled, type Ticket, type ParticipantStatus } from "./types";
 import { redis, CAS_LUA, casBackoff, CAS_MAX_ATTEMPTS } from "./redis";
 
 export type IndexParticipant = {
@@ -68,9 +68,7 @@ export function toIndexEntry(t: Ticket): IndexEntry {
     createdAt: t.createdAt,
     closedAt: t.closedAt,
     participantCount: t.participants.length,
-    settledCount: t.participants.filter(
-      (p) => p.status === "confirmed" || p.status === "cash",
-    ).length,
+    settledCount: t.participants.filter((p) => isSettled(p.status)).length,
     participants: t.participants.map((p) => ({
       name: p.name,
       email: p.email ? p.email.toLowerCase() : null,

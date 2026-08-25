@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { getTicket } from "@/lib/store";
+import { isSettled } from "@/lib/types";
 
 export const runtime = "nodejs";
 export const size = { width: 1200, height: 630 };
@@ -34,9 +35,7 @@ export default async function OGImage({ params }: { params: { slug: string } }) 
     );
   }
 
-  const paid = ticket.participants.filter(
-    (p) => p.status === "confirmed" || p.status === "cash",
-  );
+  const paid = ticket.participants.filter((p) => isSettled(p.status));
 
   const billDate = new Date(ticket.createdAt).toLocaleDateString("en-GB", {
     weekday: "short",
@@ -66,7 +65,7 @@ export default async function OGImage({ params }: { params: { slug: string } }) 
   const amountFontSize = useTwoCols ? 22 : 24;
 
   const renderRow = (p: (typeof visible)[number], moss: string, saffron: string) => {
-    const isPaid = p.status === "confirmed" || p.status === "cash";
+    const isPaid = isSettled(p.status);
     return (
       <div
         key={p.id}
