@@ -4,7 +4,7 @@ import { readIndexOrRebuild } from "@/lib/tickets-index";
 import { computeBalances } from "@/lib/balances";
 import { getViewer } from "@/lib/auth";
 import { isAdmin } from "@/lib/admin";
-import { BalancesView } from "./BalancesView";
+import { BalancesView } from "@/components/BalancesView";
 
 export const dynamic = "force-dynamic";
 

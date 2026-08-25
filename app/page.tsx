@@ -88,9 +88,6 @@ export default async function Home() {
         </Link>
         <p className="eyebrow mt-3">Takes ~ 20 SECONDS</p>
         <div className="mt-6 flex flex-col items-center gap-2">
-          <Link href="/balances" className="eyebrow ink-link">
-            ⋯ BALANCES BY PERSON →
-          </Link>
           <Link href="/people" className="eyebrow ink-link">
             ⋯ MANAGE THE LUNCH ROSTER →
           </Link>
