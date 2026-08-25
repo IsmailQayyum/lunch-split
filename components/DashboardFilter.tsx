@@ -5,6 +5,8 @@ import Link from "next/link";
 import type { IndexEntry } from "@/lib/tickets-index";
 import { isSettled } from "@/lib/types";
 import { bulkDeleteTicketsAction } from "@/lib/actions/tickets";
+import { computeBalances } from "@/lib/balances";
+import { BalancesView } from "./BalancesView";
 
 type Props = {
   entries: IndexEntry[];
@@ -32,6 +34,7 @@ function fmtBillDate(iso: string | null | undefined): string {
 }
 
 type DatePreset = "all" | "today" | "week" | "month";
+type ViewMode = "tickets" | "person";
 
 export default function DashboardFilter({
   entries,
@@ -46,6 +49,8 @@ export default function DashboardFilter({
   const showBalances = loggedIn && (youOwe > 0 || owedToYou > 0);
   const [query, setQuery] = useState("");
   const [datePreset, setDatePreset] = useState<DatePreset>("all");
+  const [viewMode, setViewMode] = useState<ViewMode>("tickets");
+  const personMode = loggedIn && viewMode === "person";
 
   // Bulk-delete state
   const [selectMode, setSelectMode] = useState(false);
@@ -53,38 +58,50 @@ export default function DashboardFilter({
   const [pwdError, setPwdError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
+  const dateFiltered = useMemo(() => {
+    if (datePreset === "all") return entries;
+    const now = new Date();
+    let cutoff: Date;
+    if (datePreset === "today") {
+      cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    } else if (datePreset === "week") {
+      cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    } else {
+      cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    }
+    return entries.filter((e) => new Date(e.createdAt) >= cutoff);
+  }, [entries, datePreset]);
+
   const filtered = useMemo(() => {
-    let results = entries;
-
     const q = query.trim().toLowerCase();
-    if (q) {
-      results = results.filter((e) => {
-        const haystack = [
-          e.title,
-          e.payerName,
-          ...e.participants.map((p) => p.name),
-        ]
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(q);
-      });
-    }
+    if (!q) return dateFiltered;
+    return dateFiltered.filter((e) => {
+      const haystack = [
+        e.title,
+        e.payerName,
+        ...e.participants.map((p) => p.name),
+      ]
+        .join(" ")
+        .toLowerCase();
+      return haystack.includes(q);
+    });
+  }, [dateFiltered, query]);
 
-    if (datePreset !== "all") {
-      const now = new Date();
-      let cutoff: Date;
-      if (datePreset === "today") {
-        cutoff = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      } else if (datePreset === "week") {
-        cutoff = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
-      } else {
-        cutoff = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
-      }
-      results = results.filter((e) => new Date(e.createdAt) >= cutoff);
-    }
-
-    return results;
-  }, [entries, query, datePreset]);
+  // Person-centric pivot of the same (date-filtered) tickets; the search box
+  // matches people rather than tickets in this mode.
+  const personBalances = useMemo(() => {
+    if (!personMode || !viewerEmail) return [];
+    const balances = computeBalances(dateFiltered, viewerEmail);
+    const q = query.trim().toLowerCase();
+    if (!q) return balances;
+    return balances.filter(
+      (b) =>
+        b.name.toLowerCase().includes(q) ||
+        (b.email ?? "").includes(q) ||
+        b.owesYou.lines.some((l) => l.title.toLowerCase().includes(q)) ||
+        b.youOwe.lines.some((l) => l.title.toLowerCase().includes(q)),
+    );
+  }, [personMode, viewerEmail, dateFiltered, query]);
 
   const open = filtered
     .filter((e) => e.status === "open")
@@ -184,6 +201,33 @@ export default function DashboardFilter({
     <>
       {/* Search + filters */}
       <div className="space-y-3 mb-8">
+        {loggedIn && (
+          <div className="flex" role="tablist" aria-label="Dashboard view">
+            {(
+              [
+                ["tickets", "☰ BY TICKETS"],
+                ["person", "◉ BY PERSON"],
+              ] as [ViewMode, string][]
+            ).map(([mode, label]) => (
+              <button
+                key={mode}
+                role="tab"
+                aria-selected={viewMode === mode}
+                onClick={() => {
+                  setViewMode(mode);
+                  if (mode === "person") exitSelectMode();
+                }}
+                className={`flex-1 text-[11px] font-mono tracking-wider px-3 py-2 border transition-colors ${
+                  viewMode === mode
+                    ? "border-ink bg-ink text-paper-light"
+                    : "border-ink-faint/40 text-ink-faint hover:border-ink hover:text-ink"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
         <div className="relative">
           <span className="absolute left-0 top-1/2 -translate-y-1/2 text-ink-faint text-[13px]">
             /
@@ -192,7 +236,11 @@ export default function DashboardFilter({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search tickets, payers, people..."
+            placeholder={
+              personMode
+                ? "Search people, tickets..."
+                : "Search tickets, payers, people..."
+            }
             className="field-underline pl-4 text-[13px]"
           />
           {query && (
@@ -225,7 +273,7 @@ export default function DashboardFilter({
             </button>
           ))}
           <span className="flex-1" />
-          {!selectMode ? (
+          {personMode ? null : !selectMode ? (
             (viewerEmail || isAdmin) && (
               <button
                 type="button"
@@ -247,7 +295,9 @@ export default function DashboardFilter({
         </div>
         {hasFilters && (
           <div className="text-[10px] font-mono tracking-wider text-ink-faint">
-            {filtered.length} TICKET{filtered.length !== 1 ? "S" : ""} FOUND
+            {personMode
+              ? `${personBalances.length} ${personBalances.length === 1 ? "PERSON" : "PEOPLE"} FOUND`
+              : `${filtered.length} TICKET${filtered.length !== 1 ? "S" : ""} FOUND`}
             {hasFilters && (
               <button
                 onClick={() => {
@@ -316,8 +366,36 @@ export default function DashboardFilter({
         </section>
       )}
 
-      {/* Open tickets — split by your role when logged in */}
-      {!loggedIn ? (
+      {/* Person-centric view — same tickets pivoted by counterparty */}
+      {personMode ? (
+        <section>
+          <div className="flex items-end justify-between mb-1">
+            <div>
+              <div className="eyebrow text-saffron">
+                ◉ BY PERSON · {personBalances.length}
+              </div>
+              <div className="display-italic text-[34px] leading-none mt-2">
+                Who owes whom.
+              </div>
+            </div>
+          </div>
+          <div className="divider-dots my-4" />
+          {personBalances.length === 0 ? (
+            <div className="text-center py-6 text-[13px] text-ink-soft italic">
+              {hasFilters ? (
+                "No matching people."
+              ) : (
+                <>
+                  All square. Nobody owes anybody a rupee.{" "}
+                  <em className="display-italic">Mashallah.</em>
+                </>
+              )}
+            </div>
+          ) : (
+            <BalancesView balances={personBalances} />
+          )}
+        </section>
+      ) : !loggedIn ? (
         <section>
           <div className="flex items-end justify-between mb-1">
             <div>
@@ -435,7 +513,8 @@ export default function DashboardFilter({
         </>
       )}
 
-      {/* Resolved */}
+      {/* Resolved — ticket view only */}
+      {!personMode && (
       <section className="mt-12">
         <div className="flex items-end justify-between mb-1">
           <div>
@@ -472,6 +551,7 @@ export default function DashboardFilter({
           </ul>
         )}
       </section>
+      )}
 
       {/* Bottom action bar — only when in select mode + something picked */}
       {selectMode && selected.size > 0 && (
